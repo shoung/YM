@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>簽名板</title>
+<style>
+  #signatureCanvas {
+    border: 1px solid black;
+    cursor: crosshair;
+  }
+  body { font-family: sans-serif; margin: 20px; }
+  .button-container { margin-top: 10px; }
+  button { padding: 10px 15px; font-size: 16px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h3>請在此處簽名或繪圖：</h3>
+<canvas id="signatureCanvas" width="500" height="200"></canvas>
+
+<div class="button-container">
+  <button onclick="saveSignature()">儲存簽名</button>
+  <button onclick="clearCanvas()">清除畫布</button>
+</div>
+
+<script>
+  const canvas = document.getElementById('signatureCanvas');
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  // 設定畫筆樣式 (可選)
+  ctx.strokeStyle = '#000000'; // 黑色
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round'; // 線條末端圓滑
+  ctx.lineJoin = 'round'; // 線條連接處圓滑
+
+
+  function getMousePos(canvasDom, mouseEvent) {
+    const rect = canvasDom.getBoundingClientRect();
+    return {
+      x: mouseEvent.clientX - rect.left,
+      y: mouseEvent.clientY - rect.top
+    };
+  }
+
+  function getTouchPos(canvasDom, touchEvent) {
+    const rect = canvasDom.getBoundingClientRect();
+    return {
+      x: touchEvent.touches[0].clientX - rect.left,
+      y: touchEvent.touches[0].clientY - rect.top
+    };
+  }
+
+  // 滑鼠事件
+  canvas.addEventListener('mousedown', (e) => {
+    drawing = true;
+    const mousePos = getMousePos(canvas, e);
+    [lastX, lastY] = [mousePos.x, mousePos.y];
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!drawing) return;
+    const mousePos = getMousePos(canvas, e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(mousePos.x, mousePos.y);
+    ctx.stroke();
+    [lastX, lastY] = [mousePos.x, mousePos.y];
+  });
+
+  canvas.addEventListener('mouseup', () => drawing = false);
+  canvas.addEventListener('mouseout', () => drawing = false); // 離開畫布也停止繪製
+
+  // 觸控事件 (基本支援)
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault(); // 防止頁面滾動
+    drawing = true;
+    const touchPos = getTouchPos(canvas, e);
+    [lastX, lastY] = [touchPos.x, touchPos.y];
+  });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // 防止頁面滾動
+    if (!drawing) return;
+    const touchPos = getTouchPos(canvas, e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(touchPos.x, touchPos.y);
+    ctx.stroke();
+    [lastX, lastY] = [touchPos.x, touchPos.y];
+  });
+
+  canvas.addEventListener('touchend', () => drawing = false);
+
+
+  function clearCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function saveSignature() {
+    if (isCanvasEmpty()) {
+        alert("畫布是空的，請先簽名或繪圖。");
+        return;
+    }
+    // 將畫布內容轉換為 PNG 格式的 Base64 字串
+    const dataURL = canvas.toDataURL('image/png');
+    // 移除 "data:image/png;base64," 前綴，只保留 Base64 數據本身
+    const base64Data = dataURL.replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
+
+    // 呼叫 FileMaker 腳本並傳遞 Base64 資料
+    // 'SaveImageFromJS' 是您要在 FileMaker 中建立的腳本名稱
+    // 'base64Data' 是傳遞給 FileMaker 腳本的參數
+    // '""' (空字串) 可以是 FileMaker.PerformScriptWithOption 的第二個參數 (option)
+    // 如果 FileMaker 版本較新 (19.4+)，建議使用 FileMaker.PerformScriptWithOption
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScriptWithOption) {
+        FileMaker.PerformScriptWithOption("SaveImageFromJS", base64Data, "");
+    } else if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
+        // 舊版 FileMaker 可能只支援 FileMaker.PerformScript
+        FileMaker.PerformScript("SaveImageFromJS", base64Data);
+    } else {
+        alert("無法連接到 FileMaker。請在 FileMaker Web Viewer 中執行此頁面。");
+        // 作為測試，可以在瀏覽器控制台輸出 Base64
+        console.log(base64Data);
+    }
+  }
+
+  function isCanvasEmpty() {
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    return canvas.toDataURL() === blank.toDataURL();
+  }
+
+</script>
+</body>
+</html>
