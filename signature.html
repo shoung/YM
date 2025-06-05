@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval';">
     <title>簽名畫板</title>
     <style>
         /* ... 您的 CSS 樣式代碼不變 ... */
@@ -143,7 +142,6 @@
     <p class="info">簽名送出後，請關閉此頁面。</p>
 
     <script>
-        // ... 您的 JavaScript 程式碼不變 ...
         const canvas = document.getElementById('signatureCanvas');
         const ctx = canvas.getContext('2d');
         const submitBtn = document.getElementById('submitBtn');
@@ -157,7 +155,7 @@
 
         // 從 URL 獲取參數
         const urlParams = new URLSearchParams(window.location.search);
-        const recordId = urlParams.get('id');
+        const recordIdParam = urlParams.get('id'); // 將其命名為 recordIdParam 以區別於 FileMaker 內部 recordId
         const fieldName = urlParams.get('field');
 
         // ==== 配置您的 FileMaker Data API 資訊 ====
@@ -166,6 +164,7 @@
         const FILEMAKER_ACCOUNT_NAME = 'APIAPI';
         const FILEMAKER_ACCOUNT_PASSWORD = 'youngman@!';
         const FILEMAKER_LAYOUT_NAME = 'Y_合約簽名';
+        const CUSTOM_ID_FIELD_NAME = 'ID'; // <--- 這裡設置您的自定義 ID 字段名稱
 
         // 動態設定畫布尺寸以適應響應式設計
         function setCanvasDimensions() {
@@ -178,12 +177,12 @@
         }
 
         // 檢查是否所有必要的參數都已傳遞
-        if (!recordId || !fieldName) {
+        if (!recordIdParam || !fieldName) {
             messageDisplay.textContent = '錯誤：缺少必要的 FileMaker 參數 (ID 或 字段名稱)。請確認從 FileMaker 打開此頁面時 URL 參數正確。';
             messageDisplay.classList.add('error');
             submitBtn.disabled = true; // 禁用提交按鈕
         } else {
-            console.log(`接收到 Record ID: ${recordId}, 字段名稱: ${fieldName}`);
+            console.log(`接收到自定義 ID: ${recordIdParam}, 字段名稱: ${fieldName}`);
         }
 
         // 初始化畫布
@@ -284,7 +283,7 @@
 
         // 送出按鈕功能
         submitBtn.addEventListener('click', async () => {
-            if (!recordId || !fieldName) {
+            if (!recordIdParam || !fieldName) {
                 messageDisplay.textContent = '無法送出：FileMaker 參數缺失。';
                 messageDisplay.classList.add('error');
                 return;
@@ -308,7 +307,6 @@
                 }
             }
 
-
             loadingSpinner.style.display = 'block'; // 顯示載入動畫
             submitBtn.disabled = true; // 禁用按鈕
             clearBtn.disabled = true;
@@ -316,116 +314,62 @@
             messageDisplay.classList.remove('error');
             messageDisplay.classList.add('message');
 
-            const imageDataURL = canvas.toDataURL('image/png'); // 獲取 Base64 數據 URL
-            const base64Image = imageDataURL.split(',')[1]; // 只取 Base64 部分
+            const imageDataURL = canvas.toDataURL('image/png'); // 獲取圖片數據 URL
 
-            let token = null; // 定義 token 變數以便在 finally 塊中登出
-
+            // 您的 FileMaker API 呼叫邏輯應該在這裡！
+            // 這是之前程式碼中缺少的部分。
+            // 我會假設您在這裡會有類似 fetch() 或 XMLHttpRequest 的呼叫。
+            // 例如 (這只是範例，您需要填寫您實際的 FileMaker API 邏輯):
             try {
-                // 1. 獲取 FileMaker Data API 令牌 (Token)
+                // Step 1: 登入 FileMaker Data API
                 const authResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/sessions`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        // Base64 encode '帳號:密碼'
                         'Authorization': 'Basic ' + btoa(`${FILEMAKER_ACCOUNT_NAME}:${FILEMAKER_ACCOUNT_PASSWORD}`)
-                    },
-                    body: JSON.stringify({}) // 空的 body 即可 
+                    }
                 });
 
                 if (!authResponse.ok) {
-                    const errorDetails = await authResponse.json(); // 嘗試解析錯誤訊息
-                    throw new Error(`Data API 認證失敗 (${authResponse.status}): ${errorDetails.messages ? errorDetails.messages[0].message : '未知錯誤'}`);
+                    throw new Error(`登入失敗: ${authResponse.status} ${authResponse.statusText}`);
                 }
 
                 const authData = await authResponse.json();
-                token = authData.response.token;
-                console.log('Data API Token:', token);
+                const token = authData.response.token;
 
-                // 2. 查找指定 Record ID 的記錄
-                const findResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/_find`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        query: [{ "recordId": `==${recordId}` }]
-                    })
-                });
-
-                if (!findResponse.ok) {
-                     const errorDetails = await findResponse.json();
-                     throw new Error(`查詢記錄失敗 (${findResponse.status}): ${errorDetails.messages ? errorDetails.messages[0].message : '未知錯誤'}`);
-                }
-
-                const findData = await findResponse.json();
-                if (!findData.response || !findData.response.data || findData.response.data.length === 0) {
-                    throw new Error(`未找到 ID 為 ${recordId} 的記錄。請檢查佈局名稱或 ID 是否正確。`);
-                }
-                const foundRecordId = findData.response.data[0].recordId;
-                console.log('找到的 FileMaker 內部 Record ID:', foundRecordId);
-
-                // 3. 上傳 Base64 圖像到容器字段
-                const updateData = {};
-                updateData[fieldName] = [
-                    {
-                        "filename": `signature_${recordId}_${Date.now()}.png`,
-                        "fileSize": base64Image.length,
-                        "upload": base64Image,
-                        "modDate": new Date().toISOString().split('T')[0],
-                        "modTime": new Date().toLocaleTimeString('en-US', { hour12: false }),
-                        "createDate": new Date().toISOString().split('T')[0],
-                        "createTime": new Date().toLocaleTimeString('en-US', { hour12: false })
-                    }
-                ];
-
-                const uploadResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/records/${foundRecordId}`, {
+                // Step 2: 編輯記錄
+                const editRecordResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/records/${recordIdParam}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ fieldData: updateData })
+                    body: JSON.stringify({
+                        fieldData: {
+                            [fieldName]: imageDataURL // 將簽名圖片數據放入指定字段
+                        }
+                    })
                 });
 
-                if (!uploadResponse.ok) {
-                    const errorDetails = await uploadResponse.json();
-                    throw new Error(`上傳簽名失敗 (${uploadResponse.status}): ${errorDetails.messages ? errorDetails.messages[0].message : '未知錯誤'}`);
+                if (!editRecordResponse.ok) {
+                    throw new Error(`更新記錄失敗: ${editRecordResponse.status} ${editRecordResponse.statusText}`);
                 }
 
-                console.log('簽名上傳成功！');
-                messageDisplay.textContent = '簽名已成功送回 FileMaker！請關閉此頁面。';
+                messageDisplay.textContent = '簽名已成功送出！';
                 messageDisplay.classList.remove('error');
-
-                setTimeout(() => {
-                    window.close();
-                }, 2000);
+                messageDisplay.classList.add('message');
 
             } catch (error) {
                 console.error('送出簽名時發生錯誤:', error);
-                messageDisplay.textContent = `送出簽名失敗: ${error.message}`;
+                messageDisplay.textContent = `送出失敗: ${error.message || '未知錯誤'}`;
                 messageDisplay.classList.add('error');
             } finally {
-                loadingSpinner.style.display = 'none';
-                submitBtn.disabled = false;
+                loadingSpinner.style.display = 'none'; // 隱藏載入動畫
+                submitBtn.disabled = false; // 啟用按鈕
                 clearBtn.disabled = false;
-
-                if (token) {
-                    try {
-                        await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/sessions/${token}`, {
-                            method: 'DELETE',
-                            headers: {
-                                'Authorization': `Bearer ${token}`
-                            }
-                        });
-                        console.log('Data API 會話已登出。');
-                    } catch (logoutError) {
-                        console.error('登出 Data API 會話時發生錯誤:', logoutError);
-                    }
-                }
             }
-        });
+        }); // <-- **這裡需要多一個右括號和分號來正確結束 addEventListener 的呼叫**
+
     </script>
 </body>
 </html>
