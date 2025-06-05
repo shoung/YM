@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>簽名畫板</title>
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+    <title>簽名畫板</title>
     <style>
+        /* ... 您的 CSS 樣式代碼不變 ... */
         body {
             font-family: Arial, sans-serif;
             display: flex;
@@ -142,6 +143,7 @@
     <p class="info">簽名送出後，請關閉此頁面。</p>
 
     <script>
+        // ... 您的 JavaScript 程式碼不變 ...
         const canvas = document.getElementById('signatureCanvas');
         const ctx = canvas.getContext('2d');
         const submitBtn = document.getElementById('submitBtn');
@@ -328,7 +330,7 @@
                         // Base64 encode '帳號:密碼'
                         'Authorization': 'Basic ' + btoa(`${FILEMAKER_ACCOUNT_NAME}:${FILEMAKER_ACCOUNT_PASSWORD}`)
                     },
-                    body: JSON.stringify({}) // 空的 body 即可
+                    body: JSON.stringify({}) // 空的 body 即可 
                 });
 
                 if (!authResponse.ok) {
