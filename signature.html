@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簽名畫板</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+            padding: 20px; /* 增加一些內邊距，避免內容緊貼邊緣 */
+            box-sizing: border-box; /* 確保 padding 不會增加總寬度 */
+        }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        #signatureCanvas {
+            border: 2px solid #333;
+            background-color: #fff;
+            cursor: crosshair;
+            touch-action: none; /* 防止移動時觸發瀏覽器滾動 */
+            /* 讓畫布根據螢幕寬度自適應，但最大不超過 600px */
+            width: 100%; 
+            max-width: 600px; /* 限制最大寬度，避免在桌面瀏覽器上過大 */
+            height: auto; /* 高度自動調整 */
+            aspect-ratio: 2 / 1; /* 設定寬高比為 2:1，例如 400x200 或 600x300 */
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px; /* 增加按鈕間距 */
+            align-items: center;
+            flex-wrap: wrap; /* 讓按鈕在小螢幕上換行 */
+            justify-content: center; /* 按鈕居中 */
+        }
+        button {
+            padding: 12px 25px; /* 增加按鈕點擊區域 */
+            font-size: 18px; /* 放大字體 */
+            cursor: pointer;
+            border: none;
+            border-radius: 8px; /* 圓角更明顯 */
+            color: white;
+            background-color: #007bff;
+            min-width: 120px; /* 統一按鈕寬度 */
+            text-align: center;
+            transition: background-color 0.3s ease; /* 平滑過渡效果 */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 增加陰影效果 */
+        }
+        button:hover {
+            opacity: 0.9;
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        #clearBtn {
+            background-color: #dc3545;
+        }
+        #clearBtn:hover {
+            background-color: #c82333;
+        }
+        #loadingSpinner {
+            display: none;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #007bff;
+            border-radius: 50%;
+            width: 28px; /* 稍微放大 */
+            height: 28px;
+            animation: spin 1s linear infinite;
+            margin-left: 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .message {
+            margin-top: 20px;
+            font-size: 1.2em; /* 放大字體 */
+            color: green;
+            font-weight: bold;
+            text-align: center;
+            padding: 0 10px; /* 確保訊息不會超出螢幕 */
+        }
+        .error {
+            color: red;
+        }
+        .info {
+            color: #555;
+            font-size: 1em; /* 放大字體 */
+            margin-top: 15px;
+            text-align: center;
+            padding: 0 10px;
+        }
+
+        /* 針對直式手機的媒體查詢 */
+        @media (orientation: portrait) and (max-width: 767px) {
+            body {
+                padding: 10px;
+            }
+            h1 {
+                font-size: 1.8em;
+                margin-bottom: 15px;
+            }
+            #signatureCanvas {
+                width: calc(100% - 20px); /* 考慮到 body padding */
+                max-width: 90vw; /* 在直式螢幕上更寬 */
+                height: auto;
+                aspect-ratio: 1.5 / 1; /* 調整為更「直」的比例，例如 3:2 或 1.5:1 */
+            }
+            button {
+                font-size: 16px;
+                padding: 10px 20px;
+                min-width: 100px;
+            }
+            .controls {
+                gap: 10px;
+            }
+            .message, .info {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>請在此簽名</h1>
+    <canvas id="signatureCanvas"></canvas>
+    <div class="controls">
+        <button id="submitBtn">送出</button>
+        <button id="clearBtn">清除</button>
+        <div id="loadingSpinner"></div>
+    </div>
+    <p id="message" class="message"></p>
+    <p class="info">簽名送出後，請關閉此頁面。</p>
+
+    <script>
+        const canvas = document.getElementById('signatureCanvas');
+        const ctx = canvas.getContext('2d');
+        const submitBtn = document.getElementById('submitBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const messageDisplay = document.getElementById('message');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // 從 URL 獲取參數
+        const urlParams = new URLSearchParams(window.location.search);
+        const recordId = urlParams.get('id');
+        const fieldName = urlParams.get('field');
+
+        // ==== 配置您的 FileMaker Data API 資訊 ====
+        // 警告：將這些憑證直接暴露在前端程式碼中是不安全的做法，
+        // 僅適用於內部、低安全性要求或概念驗證。
+        // 在生產環境中，應使用中間後端服務來處理 API 憑證。
+        const FILEMAKER_SERVER_HOST = 'ym-fm.thebarkingdog.tw';
+        const FILEMAKER_DATABASE_NAME = 'Cleaners';
+        const FILEMAKER_ACCOUNT_NAME = 'APIAPI';
+        const FILEMAKER_ACCOUNT_PASSWORD = 'youngman@!';
+        const FILEMAKER_LAYOUT_NAME = 'Y_合約簽名'; // 此佈局必須包含 ID 和簽名容器字段
+
+        // 動態設定畫布尺寸以適應響應式設計
+        function setCanvasDimensions() {
+            const canvasStyleWidth = window.getComputedStyle(canvas).width;
+            const canvasStyleHeight = window.getComputedStyle(canvas).height;
+            canvas.width = parseInt(canvasStyleWidth);
+            canvas.height = parseInt(canvasStyleHeight);
+            initializeCanvas(); // 重新初始化畫布內容
+        }
+
+        // 檢查是否所有必要的參數都已傳遞
+        if (!recordId || !fieldName) {
+            messageDisplay.textContent = '錯誤：缺少必要的 FileMaker 參數 (ID 或 字段名稱)。請確認從 FileMaker 打開此頁面時 URL 參數正確。';
+            messageDisplay.classList.add('error');
+            submitBtn.disabled = true; // 禁用提交按鈕
+        } else {
+            console.log(`接收到 Record ID: ${recordId}, 字段名稱: ${fieldName}`);
+        }
+
+        // 初始化畫布
+        function initializeCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清除舊內容
+            ctx.fillStyle = '#fff'; // 填充白色背景
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#000'; // 簽名顏色
+            ctx.lineWidth = 2; // 線條粗細
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            messageDisplay.textContent = ''; // 清除訊息
+        }
+
+        // 頁面載入時和視窗大小改變時設定畫布尺寸
+        window.addEventListener('load', setCanvasDimensions);
+        window.addEventListener('resize', setCanvasDimensions);
+
+        // 繪圖事件監聽器 (滑鼠)
+        function draw(e) {
+            if (!isDrawing) return;
+            // 獲取相對於畫布的座標
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            [lastX, lastY] = [e.clientX - rect.left, e.clientY - rect.top];
+        });
+
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mouseout', () => isDrawing = false);
+
+        // 觸控事件監聽器
+        function getTouchPos(canvasDom, touchEvent) {
+            const rect = canvasDom.getBoundingClientRect();
+            return {
+                x: touchEvent.touches[0].clientX - rect.left,
+                y: touchEvent.touches[0].clientY - rect.top
+            };
+        }
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // 防止滾動或縮放
+            isDrawing = true;
+            const touch = getTouchPos(canvas, e);
+            [lastX, lastY] = [touch.x, touch.y];
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // 防止滾動或縮放
+            if (!isDrawing) return;
+            const touch = getTouchPos(canvas, e);
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(touch.x, touch.y);
+            ctx.stroke();
+            [lastX, lastY] = [touch.x, touch.y];
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => isDrawing = false);
+        canvas.addEventListener('touchcancel', () => isDrawing = false);
+
+        // 清除按鈕功能
+        clearBtn.addEventListener('click', initializeCanvas);
+
+        // 送出按鈕功能
+        submitBtn.addEventListener('click', async () => {
+            if (!recordId || !fieldName) {
+                messageDisplay.textContent = '無法送出：FileMaker 參數缺失。';
+                messageDisplay.classList.add('error');
+                return;
+            }
+
+            // 檢查畫布是否為空白 (僅基於像素數據判斷)
+            const imageDataURLCheck = canvas.toDataURL('image/png');
+            const blankCanvasDataURL = (() => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.fillStyle = '#fff';
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                return tempCanvas.toDataURL('image/png');
+            })();
+
+            if (imageDataURLCheck === blankCanvasDataURL) {
+                if (!confirm('畫布是空白的，確定要送出一個空白簽名嗎？')) {
+                    return;
+                }
+            }
+
+
+            loadingSpinner.style.display = 'block'; // 顯示載入動畫
+            submitBtn.disabled = true; // 禁用按鈕
+            clearBtn.disabled = true;
+            messageDisplay.textContent = '正在送出簽名...';
+            messageDisplay.classList.remove('error');
+            messageDisplay.classList.add('message');
+
+            const imageDataURL = canvas.toDataURL('image/png'); // 獲取 Base64 數據 URL
+            const base64Image = imageDataURL.split(',')[1]; // 只取 Base64 部分
+
+            let token = null; // 定義 token 變數以便在 finally 塊中登出
+
+            try {
+                // 1. 獲取 FileMaker Data API 令牌 (Token)
+                const authResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // Base64 encode '帳號:密碼'
+                        'Authorization': 'Basic ' + btoa(`${FILEMAKER_ACCOUNT_NAME}:${FILEMAKER_ACCOUNT_PASSWORD}`)
+                    },
+                    body: JSON.stringify({}) // 空的 body 即可
+                });
+
+                if (!authResponse.ok) {
+                    const errorDetails = await authResponse.json(); // 嘗試解析錯誤訊息
+                    throw new Error(`Data API 認證失敗 (${authResponse.status}): ${errorDetails.messages ? errorDetails.messages[0].message : '未知錯誤'}`);
+                }
+
+                const authData = await authResponse.json();
+                token = authData.response.token;
+                console.log('Data API Token:', token);
+
+                // 2. 查找指定 Record ID 的記錄
+                // 使用 FileMaker 的 recordId 進行查找。
+                const findResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/_find`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        query: [{ "recordId": `==${recordId}` }] // 使用 == 進行精確匹配 FileMaker 的 recordId
+                    })
+                });
+
+                if (!findResponse.ok) {
+                     const errorDetails = await findResponse.json();
+                     throw new Error(`查詢記錄失敗 (${findResponse.status}): ${errorDetails.messages ? errorDetails.messages[0].message : '未知錯誤'}`);
+                }
+
+                const findData = await findResponse.json();
+                if (!findData.response || !findData.response.data || findData.response.data.length === 0) {
+                    throw new Error(`未找到 ID 為 ${recordId} 的記錄。請檢查佈局名稱或 ID 是否正確。`);
+                }
+                const foundRecordId = findData.response.data[0].recordId; // 獲取 FileMaker 內部 recordId
+                console.log('找到的 FileMaker 內部 Record ID:', foundRecordId);
+
+                // 3. 上傳 Base64 圖像到容器字段
+                const updateData = {};
+                updateData[fieldName] = [
+                    {
+                        "filename": `signature_${recordId}_${Date.now()}.png`, // 檔案名稱，加上時間戳防止重複
+                        "fileSize": base64Image.length, // 大約大小 (Base64字串長度，非實際二進位大小)
+                        "upload": base64Image, // Base64 圖像數據
+                        "modDate": new Date().toISOString().split('T')[0], // YYYY-MM-DD
+                        "modTime": new Date().toLocaleTimeString('en-US', { hour12: false }), // HH:MM:SS
+                        "createDate": new Date().toISOString().split('T')[0],
+                        "createTime": new Date().toLocaleTimeString('en-US', { hour12: false })
+                    }
+                ];
+
+                const uploadResponse = await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/records/${foundRecordId}`, {
+                    method: 'PATCH', // 使用 PATCH 進行更新
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ fieldData: updateData })
+                });
+
+                if (!uploadResponse.ok) {
+                    const errorDetails = await uploadResponse.json();
+                    throw new Error(`上傳簽名失敗 (${uploadResponse.status}): ${errorDetails.messages ? errorDetails.messages[0].message : '未知錯誤'}`);
+                }
+
+                console.log('簽名上傳成功！');
+                messageDisplay.textContent = '簽名已成功送回 FileMaker！請關閉此頁面。';
+                messageDisplay.classList.remove('error');
+
+                // 成功後自動關閉視窗
+                setTimeout(() => {
+                    window.close();
+                }, 2000); // 2秒後自動關閉
+
+            } catch (error) {
+                console.error('送出簽名時發生錯誤:', error);
+                messageDisplay.textContent = `送出簽名失敗: ${error.message}`;
+                messageDisplay.classList.add('error');
+            } finally {
+                loadingSpinner.style.display = 'none'; // 隱藏載入動畫
+                submitBtn.disabled = false; // 啟用按鈕
+                clearBtn.disabled = false;
+
+                // 確保無論成功或失敗都嘗試登出會話
+                if (token) {
+                    try {
+                        await fetch(`https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/sessions/${token}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        console.log('Data API 會話已登出。');
+                    } catch (logoutError) {
+                        console.error('登出 Data API 會話時發生錯誤:', logoutError);
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
