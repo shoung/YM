@@ -1,0 +1,16 @@
+{
+  "name": "filemaker-signature-app",
+  "version": "1.0.0",
+  "description": "Frontend and Serverless Proxy for FileMaker Signature App",
+  "scripts": {
+    "start": "node api/uploadSignature.js"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.7.0"
+    // 注意: 在 Vercel/Netlify Functions 中，express, cors, body-parser 通常不需要，
+    // 因為它們的環境已經處理了請求和回應對象。
+    // 但如果您的環境變數是 Node.js 服務，則需要這些。
+  }
+}
