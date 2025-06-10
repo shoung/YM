@@ -160,53 +160,46 @@
         let lastX = 0;        // 上一次繪圖的 X 座標
         let lastY = 0;        // 上一次繪圖的 Y 座標
 
-        // 從 URL 獲取參數 (例如: signature.html?id=1&field=Signature)
+        // 從 URL 獲取參數 (例如: signature.html?id=12345&field=Signature)
+        // recordIdParam 應為 FileMaker 的內部記錄 ID (Get(RecordID))
         const urlParams = new URLSearchParams(window.location.search);
-        // recordIdParam 將被用於 FileMaker Data API 的 internal record ID。
-        // 如果您的 'id' 實際上是自定義的字段值（例如客戶編號），則需要 FileMaker 腳本來查找。
         const recordIdParam = urlParams.get('id');
         const fieldName = urlParams.get('field'); // 容器字段的名稱，例如 'Signature'
 
-        // ==== 配置您的 FileMaker Data API 資訊 ====
-        const FILEMAKER_SERVER_HOST = 'ym-fm.thebarkingdog.tw';
-        const FILEMAKER_DATABASE_NAME = 'Cleaners';
-        const FILEMAKER_ACCOUNT_NAME = 'APIAPI';
-        const FILEMAKER_ACCOUNT_PASSWORD = 'youngman@!';
-        const FILEMAKER_LAYOUT_NAME = 'Y_合約簽名';
-        // CUSTOM_ID_FIELD_NAME 在此前端代碼中暫時未使用，因為直接調用 /records/{recordId}/containers 端點。
-        // 如果 recordIdParam 實際上是您自定義的 ID 字段值，則需要 FileMaker 腳本來處理查找。
-        // const CUSTOM_ID_FIELD_NAME = 'ID';
+        // ==== 代理伺服器端點配置 ====
+        // 前端現在會向相對路徑 '/api/uploadSignature' 發送請求。
+        // 這個路徑會被 Vercel/Netlify 自動路由到您的無伺服器函數。
+        const PROXY_API_PATH = '/api/uploadSignature';
+
 
         // 動態設定畫布尺寸以適應響應式設計
         function setCanvasDimensions() {
-            // 使用 getComputedStyle 獲取畫布的實際渲染寬高
             const styleWidth = window.getComputedStyle(canvas).width;
             const styleHeight = window.getComputedStyle(canvas).height;
-            // 將獲取到的 CSS 尺寸賦值給畫布的內部 width/height 屬性，這對繪圖非常重要
             canvas.width = parseInt(styleWidth);
             canvas.height = parseInt(styleHeight);
-            initializeCanvas(); // 重新初始化畫布內容 (清除並填充背景)
+            initializeCanvas();
         }
 
         // 檢查是否所有必要的參數都已傳遞
         if (!recordIdParam || !fieldName) {
             messageDisplay.textContent = '錯誤：缺少必要的 FileMaker 參數 (ID 或 字段名稱)。請確認從 FileMaker 打開此頁面時 URL 參數正確。';
             messageDisplay.classList.add('error');
-            submitBtn.disabled = true; // 禁用提交按鈕
+            submitBtn.disabled = true;
         } else {
-            console.log(`接收到自定義 ID: ${recordIdParam}, 字段名稱: ${fieldName}`);
+            console.log(`接收到內部記錄 ID: ${recordIdParam}, 字段名稱: ${fieldName}`);
         }
 
         // 初始化畫布 (清除並設定繪圖樣式)
         function initializeCanvas() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清除舊內容
-            ctx.fillStyle = '#fff'; // 填充白色背景
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#000'; // 簽名顏色 (黑色)
-            ctx.lineWidth = 2; // 線條粗細
-            ctx.lineCap = 'round'; // 線條端點圓角
-            ctx.lineJoin = 'round'; // 線條連接處圓角
-            messageDisplay.textContent = ''; // 清除所有訊息
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            messageDisplay.textContent = '';
         }
 
         // 頁面載入時和視窗大小改變時設定畫布尺寸
@@ -216,32 +209,31 @@
         // 繪圖事件監聽器 (滑鼠事件)
         function handleMouseDown(e) {
             isDrawing = true;
-            const rect = canvas.getBoundingClientRect(); // 獲取畫布在視窗中的位置和大小
-            // 計算滑鼠點擊位置相對於畫布左上角的座標
+            const rect = canvas.getBoundingClientRect();
             lastX = e.clientX - rect.left;
             lastY = e.clientY - rect.top;
         }
 
         function handleMouseMove(e) {
-            if (!isDrawing) return; // 如果沒有在繪圖，則退出
+            if (!isDrawing) return;
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            ctx.beginPath(); // 開始新路徑
-            ctx.moveTo(lastX, lastY); // 移動到上一次繪圖點
-            ctx.lineTo(x, y); // 畫線到當前點
-            ctx.stroke(); // 繪製路徑
-            lastX = x; // 更新上一次繪圖點
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            lastX = x;
             lastY = y;
         }
 
         function handleMouseUp() {
-            isDrawing = false; // 停止繪圖
+            isDrawing = false;
         }
 
         function handleMouseOut() {
-            isDrawing = false; // 滑鼠離開畫布時也停止繪圖
+            isDrawing = false;
         }
 
         // 為畫布添加滑鼠事件監聽器
@@ -261,7 +253,7 @@
 
         // 觸控事件監聽器
         function handleTouchStart(e) {
-            e.preventDefault(); // 阻止默認觸控行為 (例如捲動頁面)
+            e.preventDefault();
             isDrawing = true;
             const touch = getTouchPos(canvas, e);
             lastX = touch.x;
@@ -269,7 +261,7 @@
         }
 
         function handleTouchMove(e) {
-            e.preventDefault(); // 阻止默認觸控行為
+            e.preventDefault();
             if (!isDrawing) return;
             const touch = getTouchPos(canvas, e);
             ctx.beginPath();
@@ -289,7 +281,7 @@
         }
 
         // 為畫布添加觸控事件監聽器
-        canvas.addEventListener('touchstart', handleTouchStart, { passive: false }); // { passive: false } 允許阻止默認行為
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
         canvas.addEventListener('touchend', handleTouchEnd);
         canvas.addEventListener('touchcancel', handleTouchCancel);
@@ -299,14 +291,11 @@
 
         // 輔助函數：將 Data URL 轉換為 Blob 對象
         function dataURLtoBlob(dataurl) {
-            // 解碼 Base64 部分
             var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
                 bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-            // 將 Base64 字串轉換為 Uint8Array
             while(n--){
                 u8arr[n] = bstr.charCodeAt(n);
             }
-            // 返回 Blob 對象
             return new Blob([u8arr], {type:mime});
         }
 
@@ -325,103 +314,65 @@
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
                 const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.fillStyle = '#fff'; // 使用白色填充臨時畫布
+                tempCtx.fillStyle = '#fff';
                 tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
                 return tempCanvas.toDataURL('image/png');
             })();
 
             if (imageDataURLCheck === blankCanvasDataURL) {
-                // 不使用 alert() 或 confirm()，而是使用自定義模態框或訊息顯示
                 messageDisplay.textContent = '畫布是空白的，確定要送出一個空白簽名嗎？請再點擊一次送出確認。';
-                messageDisplay.classList.add('info'); // 使用 info 樣式
-                // 可以增加一個狀態變數，第二次點擊才送出
+                messageDisplay.classList.add('info');
                 if (submitBtn.dataset.confirmBlank === 'true') {
-                    submitBtn.dataset.confirmBlank = 'false'; // 重置
+                    submitBtn.dataset.confirmBlank = 'false';
                 } else {
                     submitBtn.dataset.confirmBlank = 'true';
-                    return; // 第一次點擊空白，提示並返回，等待第二次點擊確認
+                    return;
                 }
             } else {
-                submitBtn.dataset.confirmBlank = 'false'; // 如果不是空白，確保標誌是 false
+                submitBtn.dataset.confirmBlank = 'false';
             }
 
-
-            loadingSpinner.style.display = 'block'; // 顯示載入動畫
-            submitBtn.disabled = true; // 禁用按鈕
+            loadingSpinner.style.display = 'block';
+            submitBtn.disabled = true;
             clearBtn.disabled = true;
             messageDisplay.textContent = '正在送出簽名...';
-            messageDisplay.classList.remove('error', 'info'); // 移除錯誤和資訊樣式
-            messageDisplay.classList.add('message'); // 添加成功訊息樣式
+            messageDisplay.classList.remove('error', 'info');
+            messageDisplay.classList.add('message');
 
-            // 獲取簽名畫布的 Data URL
             const imageDataURL = canvas.toDataURL('image/png');
-            // 將 Data URL 轉換為 Blob 物件，以用於 multipart/form-data 上傳
             const imageBlob = dataURLtoBlob(imageDataURL);
-            // 定義一個文件名，這在 FileMaker 中會顯示
             const fileName = `signature_${recordIdParam}.png`;
 
             try {
-                // Step 1: 登入 FileMaker Data API
-                // 構建登入請求的 URL
-                const authUrl = `https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/sessions`;
-                const authResponse = await fetch(authUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Basic ' + btoa(`${FILEMAKER_ACCOUNT_NAME}:${FILEMAKER_ACCOUNT_PASSWORD}`)
-                    }
-                });
-
-                if (!authResponse.ok) {
-                    const errorData = await authResponse.json();
-                    throw new Error(`登入失敗: ${authResponse.status} ${authResponse.statusText} - 錯誤碼: ${errorData.messages[0].code}, 訊息: ${errorData.messages[0].message}`);
-                }
-
-                const authData = await authResponse.json();
-                const token = authData.response.token;
-
-                // Step 2: 上傳容器數據
-                // URL 格式: /fmi/data/version/databases/database-name/layouts/layout-name/records/record-id/containers/field-name/field-repetition
-                // field-repetition 通常是 1，除非您的容器字段是重複字段。
-                const containerUploadURL = `https://${FILEMAKER_SERVER_HOST}/fmi/data/v1/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/records/${recordIdParam}/containers/${fieldName}/1`;
-
-                // 創建 FormData 對象來構建 multipart/form-data 請求
+                // 向代理伺服器（無伺服器函數）發送請求
+                // 參數通過 URL 查詢字符串傳遞
+                const proxyUploadURL = `${PROXY_API_PATH}?recordIdParam=${recordIdParam}&fieldName=${fieldName}`;
+                
                 const formData = new FormData();
-                // FileMaker Data API 要求 multipart form-data 的 part name 必須是 "upload"
-                formData.append('upload', imageBlob, fileName); // 'upload' 是 FileMaker 要求的 key，imageBlob 是實際的圖片數據，fileName 是在 FileMaker 中顯示的文件名
+                formData.append('upload', imageBlob, fileName); // 將簽名數據作為 'upload' part
 
-                const containerUploadResponse = await fetch(containerUploadURL, {
-                    method: 'POST', // **上傳容器數據必須使用 POST 方法**
-                    headers: {
-                        // 當 body 是 FormData 對象時，fetch 會自動設定 Content-Type: multipart/form-data 並加上正確的 boundary
-                        'Authorization': `Bearer ${token}` // 使用 Bearer Token 進行認證
-                    },
+                const proxyResponse = await fetch(proxyUploadURL, {
+                    method: 'POST',
                     body: formData // 直接傳遞 FormData 對象
                 });
 
-                if (!containerUploadResponse.ok) {
-                    const errorData = await containerUploadResponse.json(); // FileMaker 錯誤通常是 JSON
-                    throw new Error(`上傳簽名至容器失敗: ${containerUploadResponse.status} ${containerUploadResponse.statusText} - 錯誤碼: ${errorData.messages[0].code}, 訊息: ${errorData.messages[0].message}`);
+                if (!proxyResponse.ok) {
+                    const errorData = await proxyResponse.json(); // 代理伺服器會返回 JSON 錯誤
+                    throw new Error(`上傳失敗: ${proxyResponse.status} ${proxyResponse.statusText} - ${errorData.error || '未知錯誤'}`);
                 }
 
-                // FileMaker Data API 成功上傳容器數據後通常返回 200 OK 或 204 No Content
-                // 並可能帶有 { "response": {}, "messages": [ { "code": "0", "message": "OK" } ] }
-                // 這裡可以選擇檢查回應，但如果狀態碼是 OK，通常代表成功。
-
-                messageDisplay.textContent = '簽名已成功送出！';
+                const result = await proxyResponse.json(); // 代理伺服器返回的成功訊息
+                messageDisplay.textContent = result.message || '簽名已成功送出！';
                 messageDisplay.classList.remove('error');
                 messageDisplay.classList.add('message');
-
-                // 可以選擇在成功後清除畫布或導向其他頁面
-                // initializeCanvas();
 
             } catch (error) {
                 console.error('送出簽名時發生錯誤:', error);
                 messageDisplay.textContent = `送出失敗: ${error.message || '未知錯誤'}`;
                 messageDisplay.classList.add('error');
             } finally {
-                loadingSpinner.style.display = 'none'; // 隱藏載入動畫
-                submitBtn.disabled = false; // 啟用按鈕
+                loadingSpinner.style.display = 'none';
+                submitBtn.disabled = false;
                 clearBtn.disabled = false;
             }
         });
