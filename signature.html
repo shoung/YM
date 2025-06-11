@@ -366,11 +366,26 @@
                 messageDisplay.classList.remove('error');
                 messageDisplay.classList.add('message');
 
+                // ==== 新增的自動關閉網頁功能 ====
+                let countdown = 3;
+                const countdownInterval = setInterval(() => {
+                    messageDisplay.textContent = `簽名已成功送出！頁面將在 ${countdown} 秒後關閉。`;
+                    countdown--;
+                    if (countdown < 0) {
+                        clearInterval(countdownInterval);
+                        // 嘗試關閉視窗
+                        // 注意：window.close() 只有在由腳本打開的視窗或標籤頁中才能可靠地運作。
+                        // 如果是由使用者手動打開的頁面，瀏覽器可能會阻止此操作。
+                        window.close();
+                    }
+                }, 1000); // 每秒更新一次
+
             } catch (error) {
                 console.error('送出簽名時發生錯誤:', error);
                 messageDisplay.textContent = `送出失敗: ${error.message || '未知錯誤'}`;
                 messageDisplay.classList.add('error');
             } finally {
+                // 無論成功或失敗，都恢復按鈕狀態（即使頁面會關閉）
                 loadingSpinner.style.display = 'none';
                 submitBtn.disabled = false;
                 clearBtn.disabled = false;
