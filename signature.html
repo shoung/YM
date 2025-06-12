@@ -369,7 +369,7 @@
                 // ==== 新增的自動關閉網頁功能 ====
                 let countdown = 3;
                 const countdownInterval = setInterval(() => {
-                    messageDisplay.textContent = `簽名已成功送出！頁面將在 ${countdown} 秒後關閉。`;
+                    messageDisplay.textContent = `簽名已成功送出！頁面將在 ${countdown} 秒後關閉。LINE本身的瀏覽器無法關閉網頁，請自行關閉離開即可。`;
                     countdown--;
                     if (countdown < 0) {
                         clearInterval(countdownInterval);
