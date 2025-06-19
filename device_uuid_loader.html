@@ -9,17 +9,19 @@
         p { margin-bottom: 10px; }
         .success { color: green; font-weight: bold; }
         .error { color: red; font-weight: bold; }
-        .warning { color: orange; font-weight: bold; margin-top: 20px; } /* 新增警語樣式 */
+        .warning { color: orange; font-weight: bold; margin-top: 20px; }
     </style>
 </head>
 <body>
     <p>正在載入裝置識別碼...</p>
     <p id="statusMessage"></p>
-    <p id="manualCloseWarning" class="warning" style="display: none;">如果本網頁沒有自動關閉，請手動關閉分頁後，繼續進行作業。</p> <script>
+    <p id="manualCloseWarning" class="warning" style="display: none;">如果本網頁沒有自動關閉，請手動關閉分頁後，繼續進行作業。</p>
+
+    <script>
         const UUID_KEY = 'fm_device_uuid'; // Local Storage Key
         const MANUAL_CLOSE_TIMEOUT = 3000; // 3 秒後顯示手動關閉警語
 
-        // Function to generate a UUID (same as before)
+        // Function to generate a UUID
         function generateUUID() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -27,7 +29,7 @@
             });
         }
 
-        // Function to get or create the device UUID (same as before)
+        // Function to get or create the device UUID
         function getOrCreateDeviceUUID() {
             let uuid = localStorage.getItem(UUID_KEY);
             if (!uuid) {
@@ -43,17 +45,11 @@
             const manualCloseWarning = document.getElementById('manualCloseWarning');
 
             try {
-                // *** IMPORTANT: This 'fmp' URL scheme is for FileMaker Pro/Go.
-                // For WebDirect, direct window.opener or fmp:// callback from a popup is problematic.
-                // We are proceeding with the assumption that this page is opened via FileMaker's Open URL.
-
-                // If using Open URL, the primary goal here is to ensure UUID is set in localStorage
-                // and then *attempt* to close. FileMaker will then pick it up via a separate mechanism (e.g., polling Web Viewer).
-
-                // In the context of FileMaker WebDirect's Web Viewer (our primary troubleshooting path):
-                // This 'if' block would be executed.
                 if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
-                    FileMaker.PerformScript('INDEX_身份辨識', uuid); // 呼叫 FileMaker 腳本
+                    // *** 關鍵更改：將腳本名稱改為 "INDEX_身份辨識" ***
+                    console.log('FileMaker object is available. Attempting to call script "INDEX_身份辨識" with UUID:', uuid);
+                    FileMaker.PerformScript('INDEX_身份辨識', uuid);
+                    console.log('FileMaker.PerformScript call initiated.');
                     statusMessage.className = 'success';
                     statusMessage.textContent = '裝置識別碼已傳送至 FileMaker。';
                     // 在 Web Viewer 內通常不需要自動關閉，但如果它被彈出，可能需要。
