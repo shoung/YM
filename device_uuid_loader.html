@@ -53,7 +53,7 @@
                 // In the context of FileMaker WebDirect's Web Viewer (our primary troubleshooting path):
                 // This 'if' block would be executed.
                 if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
-                    FileMaker.PerformScript('接收裝置UUID', uuid); // 呼叫 FileMaker 腳本
+                    FileMaker.PerformScript('INDEX_身份辨識', uuid); // 呼叫 FileMaker 腳本
                     statusMessage.className = 'success';
                     statusMessage.textContent = '裝置識別碼已傳送至 FileMaker。';
                     // 在 Web Viewer 內通常不需要自動關閉，但如果它被彈出，可能需要。
