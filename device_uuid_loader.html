@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Device UUID Loader</title>
+<script>
+function getOrCreateDeviceUUID() {
+    let deviceUUID = localStorage.getItem('fm_device_uuid'); // 嘗試從 localStorage 獲取 UUID
+
+    if (!deviceUUID) {
+        // 如果不存在，則生成一個新的 UUID
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            deviceUUID = crypto.randomUUID();
+        } else {
+            // Fallback for older browsers (此段代碼可能在較舊的 WebDirect 內嵌瀏覽器中被 CSP 阻擋，但對於GitHub外部頁面，CSP通常較寬鬆)
+            // 這裡使用一個簡單的 UUID 產生方法，不完全符合 RFC4122 標準，但足以區分裝置
+            deviceUUID = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+        localStorage.setItem('fm_device_uuid', deviceUUID); // 將新生成的 UUID 存儲到 localStorage
+    }
+    return deviceUUID;
+}
+
+// 當頁面載入完成時執行
+window.onload = function() {
+    const currentDeviceUUID = getOrCreateDeviceUUID();
+
+    // 將 UUID 回傳給 FileMaker 腳本
+    // 假設您在 FileMaker 中有一個名為 "接收裝置UUID" 的腳本
+    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
+        FileMaker.PerformScript('接收裝置UUID', currentDeviceUUID);
+    } else {
+        // 如果不是在 WebDirect 環境下 (例如在瀏覽器獨立打開此 HTML)，可以顯示在 console
+        console.log('FileMaker.PerformScript is not available. Device UUID:', currentDeviceUUID);
+        // 由於這是外部頁面，如果需要向用戶提示，可以考慮在 body 顯示
+        document.body.innerHTML += '<p style="font-family: sans-serif; font-size: 10px; color: red;">此頁面應在 FileMaker WebDirect 中載入。</p>';
+    }
+};
+</script>
+</head>
+<body>
+    <p style="font-family: sans-serif; font-size: 8px;">載入裝置識別碼...</p>
+</body>
+</html>
