@@ -31,7 +31,7 @@ window.onload = function() {
     // 將 UUID 回傳給 FileMaker 腳本
     // 假設您在 FileMaker 中有一個名為 "接收裝置UUID" 的腳本
     if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
-        FileMaker.PerformScript('接收裝置UUID', currentDeviceUUID);
+        FileMaker.PerformScript('INDEX_身份辨識', currentDeviceUUID);
     } else {
         // 如果不是在 WebDirect 環境下 (例如在瀏覽器獨立打開此 HTML)，可以顯示在 console
         console.log('FileMaker.PerformScript is not available. Device UUID:', currentDeviceUUID);
