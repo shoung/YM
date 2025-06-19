@@ -1,47 +1,114 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
-<meta charset="utf-8">
-<title>Device UUID Loader</title>
-<script>
-function getOrCreateDeviceUUID() {
-    let deviceUUID = localStorage.getItem('fm_device_uuid'); // 嘗試從 localStorage 獲取 UUID
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>裝置識別碼載入器</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; text-align: center; }
+        p { margin-bottom: 10px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .warning { color: orange; font-weight: bold; margin-top: 20px; } /* 新增警語樣式 */
+    </style>
+</head>
+<body>
+    <p>正在載入裝置識別碼...</p>
+    <p id="statusMessage"></p>
+    <p id="manualCloseWarning" class="warning" style="display: none;">如果本網頁沒有自動關閉，請手動關閉分頁後，繼續進行作業。</p> <script>
+        const UUID_KEY = 'fm_device_uuid'; // Local Storage Key
+        const MANUAL_CLOSE_TIMEOUT = 3000; // 3 秒後顯示手動關閉警語
 
-    if (!deviceUUID) {
-        // 如果不存在，則生成一個新的 UUID
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            deviceUUID = crypto.randomUUID();
-        } else {
-            // Fallback for older browsers (此段代碼可能在較舊的 WebDirect 內嵌瀏覽器中被 CSP 阻擋，但對於GitHub外部頁面，CSP通常較寬鬆)
-            // 這裡使用一個簡單的 UUID 產生方法，不完全符合 RFC4122 標準，但足以區分裝置
-            deviceUUID = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        // Function to generate a UUID (same as before)
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
         }
-        localStorage.setItem('fm_device_uuid', deviceUUID); // 將新生成的 UUID 存儲到 localStorage
-    }
-    return deviceUUID;
-}
 
-// 當頁面載入完成時執行
-window.onload = function() {
-    const currentDeviceUUID = getOrCreateDeviceUUID();
+        // Function to get or create the device UUID (same as before)
+        function getOrCreateDeviceUUID() {
+            let uuid = localStorage.getItem(UUID_KEY);
+            if (!uuid) {
+                uuid = generateUUID();
+                localStorage.setItem(UUID_KEY, uuid);
+            }
+            return uuid;
+        }
 
-    // 將 UUID 回傳給 FileMaker 腳本
-    // 假設您在 FileMaker 中有一個名為 "接收裝置UUID" 的腳本
-    if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
-        FileMaker.PerformScript('INDEX_身份辨識', currentDeviceUUID);
-    } else {
-        // 如果不是在 WebDirect 環境下 (例如在瀏覽器獨立打開此 HTML)，可以顯示在 console
-        console.log('FileMaker.PerformScript is not available. Device UUID:', currentDeviceUUID);
-        // 由於這是外部頁面，如果需要向用戶提示，可以考慮在 body 顯示
-        document.body.innerHTML += '<p style="font-family: sans-serif; font-size: 10px; color: red;">此頁面應在 FileMaker WebDirect 中載入。</p>';
-    }
-};
-</script>
-</head>
-<body>
-    <p style="font-family: sans-serif; font-size: 8px;">載入裝置識別碼...</p>
+        // Function to send UUID back to FileMaker and attempt to close the window
+        function sendUUIDToFileMakerAndAttemptClose(uuid) {
+            const statusMessage = document.getElementById('statusMessage');
+            const manualCloseWarning = document.getElementById('manualCloseWarning');
+
+            try {
+                // *** IMPORTANT: This 'fmp' URL scheme is for FileMaker Pro/Go.
+                // For WebDirect, direct window.opener or fmp:// callback from a popup is problematic.
+                // We are proceeding with the assumption that this page is opened via FileMaker's Open URL.
+
+                // If using Open URL, the primary goal here is to ensure UUID is set in localStorage
+                // and then *attempt* to close. FileMaker will then pick it up via a separate mechanism (e.g., polling Web Viewer).
+
+                // In the context of FileMaker WebDirect's Web Viewer (our primary troubleshooting path):
+                // This 'if' block would be executed.
+                if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
+                    FileMaker.PerformScript('接收裝置UUID', uuid); // 呼叫 FileMaker 腳本
+                    statusMessage.className = 'success';
+                    statusMessage.textContent = '裝置識別碼已傳送至 FileMaker。';
+                    // 在 Web Viewer 內通常不需要自動關閉，但如果它被彈出，可能需要。
+                    // 這裡先不加 window.close()，因為是在 Web Viewer 內。
+                    // 如果是用 Open URL 開啟，則下面的 else 區塊會處理關閉嘗試。
+                } else {
+                    // This block runs if not in a recognized FileMaker environment (e.g., direct browser open, or Open URL scenario)
+                    console.log('FileMaker.PerformScript is not available. Device UUID:', uuid);
+                    statusMessage.className = 'error'; // 或 'info' 取決於您希望的視覺效果
+                    statusMessage.textContent = '裝置識別碼已產生並儲存。'; // 假設主要目的是設置 UUID，而非回傳
+                    
+                    // 嘗試自動關閉視窗 (主要針對 Open URL 開啟的彈出視窗)
+                    setTimeout(() => {
+                        try {
+                            window.close(); // 嘗試關閉視窗
+                        } catch (e) {
+                            console.warn("自動關閉視窗失敗:", e);
+                            // 如果自動關閉失敗，顯示手動關閉警語
+                            manualCloseWarning.style.display = 'block';
+                        }
+                    }, 500); // 給一點時間處理和顯示訊息
+
+                    // 即使自動關閉成功，如果使用者在關閉前看到，也可顯示警語
+                    setTimeout(() => {
+                        if (!window.closed) { // 檢查視窗是否已經關閉
+                            manualCloseWarning.style.display = 'block';
+                        }
+                    }, MANUAL_CLOSE_TIMEOUT); // 延遲顯示警語
+                }
+
+            } catch (e) {
+                statusMessage.className = 'error';
+                statusMessage.textContent = '處理裝置識別碼時發生錯誤: ' + e.message + ' UUID: ' + uuid;
+                console.error('處理裝置識別碼時發生錯誤:', e);
+                manualCloseWarning.style.display = 'block'; // 發生錯誤也顯示警語
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentDeviceUUID = getOrCreateDeviceUUID();
+            document.body.innerHTML = `
+                <p>裝置識別碼已準備好。</p>
+                <p>UUID: <span style="font-weight: bold;">${currentDeviceUUID}</span></p>
+                <p id="statusMessage">正在嘗試處理裝置識別碼...</p>
+                <p id="manualCloseWarning" class="warning" style="display: none;">如果本網頁沒有自動關閉，請手動關閉分頁後，繼續進行作業。</p>
+            `;
+            // 重新取得元素，因為 innerHTML 改變了它們
+            const updatedStatusMessage = document.getElementById('statusMessage');
+            const updatedManualCloseWarning = document.getElementById('manualCloseWarning');
+
+            // 確保訊息和警語在執行前被正確設置
+            updatedStatusMessage.textContent = '正在嘗試處理裝置識別碼...'; // 初始狀態訊息
+
+            sendUUIDToFileMakerAndAttemptClose(currentDeviceUUID);
+        });
+    </script>
 </body>
 </html>
