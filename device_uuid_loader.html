@@ -3,23 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>裝置識別碼載入器</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; text-align: center; }
-        p { margin-bottom: 10px; }
-        .success { color: green; font-weight: bold; }
-        .error { color: red; font-weight: bold; }
-        .warning { color: orange; font-weight: bold; margin-top: 20px; }
-    </style>
+    <title>裝置識別碼初始化</title>
 </head>
 <body>
-    <p>正在載入裝置識別碼...</p>
-    <p id="statusMessage"></p>
-    <p id="manualCloseWarning" class="warning" style="display: none;">如果本網頁沒有自動關閉，請手動關閉分頁後，繼續進行作業。</p>
-
     <script>
-        const UUID_KEY = 'fm_device_uuid'; // Local Storage Key
-        const MANUAL_CLOSE_TIMEOUT = 3000; // 3 秒後顯示手動關閉警語
+        const UUID_KEY = 'fm_device_uuid'; // Local Storage Key for client-side storage
+        const API_PROXY_URL = '/api/fm-proxy'; // 您的 Vercel API Route 路徑，相對於 Vercel 部署的根目錄
 
         // Function to generate a UUID
         function generateUUID() {
@@ -29,7 +18,7 @@
             });
         }
 
-        // Function to get or create the device UUID
+        // Function to get or create the device UUID locally
         function getOrCreateDeviceUUID() {
             let uuid = localStorage.getItem(UUID_KEY);
             if (!uuid) {
@@ -39,72 +28,60 @@
             return uuid;
         }
 
-        // Function to send UUID back to FileMaker and attempt to close the window
-        function sendUUIDToFileMakerAndAttemptClose(uuid) {
-            const statusMessage = document.getElementById('statusMessage');
-            const manualCloseWarning = document.getElementById('manualCloseWarning');
-
+        // Function to send UUID to FileMaker via Vercel API Proxy
+        async function sendUUIDToFM(uuid) {
             try {
-                if (typeof FileMaker !== 'undefined' && FileMaker.PerformScript) {
-                    // *** 關鍵更改：將腳本名稱改為 "INDEX_身份辨識" ***
-                    console.log('FileMaker object is available. Attempting to call script "INDEX_身份辨識" with UUID:', uuid);
-                    FileMaker.PerformScript('INDEX_身份辨識', uuid);
-                    console.log('FileMaker.PerformScript call initiated.');
-                    statusMessage.className = 'success';
-                    statusMessage.textContent = '裝置識別碼已傳送至 FileMaker。';
-                    // 在 Web Viewer 內通常不需要自動關閉，但如果它被彈出，可能需要。
-                    // 這裡先不加 window.close()，因為是在 Web Viewer 內。
-                    // 如果是用 Open URL 開啟，則下面的 else 區塊會處理關閉嘗試。
-                } else {
-                    // This block runs if not in a recognized FileMaker environment (e.g., direct browser open, or Open URL scenario)
-                    console.log('FileMaker.PerformScript is not available. Device UUID:', uuid);
-                    statusMessage.className = 'error'; // 或 'info' 取決於您希望的視覺效果
-                    statusMessage.textContent = '裝置識別碼已產生並儲存。'; // 假設主要目的是設置 UUID，而非回傳
-                    
-                    // 嘗試自動關閉視窗 (主要針對 Open URL 開啟的彈出視窗)
-                    setTimeout(() => {
-                        try {
-                            window.close(); // 嘗試關閉視窗
-                        } catch (e) {
-                            console.warn("自動關閉視窗失敗:", e);
-                            // 如果自動關閉失敗，顯示手動關閉警語
-                            manualCloseWarning.style.display = 'block';
-                        }
-                    }, 500); // 給一點時間處理和顯示訊息
+                const response = await fetch(API_PROXY_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ uuid: uuid })
+                });
 
-                    // 即使自動關閉成功，如果使用者在關閉前看到，也可顯示警語
-                    setTimeout(() => {
-                        if (!window.closed) { // 檢查視窗是否已經關閉
-                            manualCloseWarning.style.display = 'block';
-                        }
-                    }, MANUAL_CLOSE_TIMEOUT); // 延遲顯示警語
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`發送 UUID 到 FileMaker 失敗: ${response.status} - ${errorData.message || JSON.stringify(errorData)}`);
                 }
 
-            } catch (e) {
-                statusMessage.className = 'error';
-                statusMessage.textContent = '處理裝置識別碼時發生錯誤: ' + e.message + ' UUID: ' + uuid;
-                console.error('處理裝置識別碼時發生錯誤:', e);
-                manualCloseWarning.style.display = 'block'; // 發生錯誤也顯示警語
+                const result = await response.json();
+                console.log('UUID 已成功處理並同步到 FileMaker:', result);
+                return true; // 表示成功
+            } catch (error) {
+                console.error('發送 UUID 到 FileMaker 時發生錯誤:', error);
+                return false; // 表示失敗
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const currentDeviceUUID = getOrCreateDeviceUUID();
-            document.body.innerHTML = `
-                <p>裝置識別碼已準備好。</p>
-                <p>UUID: <span style="font-weight: bold;">${currentDeviceUUID}</span></p>
-                <p id="statusMessage">正在嘗試處理裝置識別碼...</p>
-                <p id="manualCloseWarning" class="warning" style="display: none;">如果本網頁沒有自動關閉，請手動關閉分頁後，繼續進行作業。</p>
-            `;
-            // 重新取得元素，因為 innerHTML 改變了它們
-            const updatedStatusMessage = document.getElementById('statusMessage');
-            const updatedManualCloseWarning = document.getElementById('manualCloseWarning');
+        // Main logic to handle UUID
+        async function handleDeviceUUID() {
+            const uuid = getOrCreateDeviceUUID();
+            console.log('裝置本地 UUID:', uuid);
 
-            // 確保訊息和警語在執行前被正確設置
-            updatedStatusMessage.textContent = '正在嘗試處理裝置識別碼...'; // 初始狀態訊息
+            const success = await sendUUIDToFM(uuid);
 
-            sendUUIDToFileMakerAndAttemptClose(currentDeviceUUID);
-        });
+            if (success) {
+                console.log('裝置 UUID 處理完成，已嘗試同步至 FileMaker。');
+            } else {
+                console.error('裝置 UUID 同步到 FileMaker 失敗。');
+            }
+            
+            // 由於這是後台初始化，可能不需要顯示任何內容給用戶
+            // 頁面可以靜默執行，甚至可以考慮自動關閉（如果它是彈出視窗）
+            // 或者，如果您不希望彈出任何視窗，則可以在 FileMaker WebDirect 的登入頁面直接嵌入這段 JavaScript
+            // 如果它被 "開啟 URL" 開啟，則可以讓它自行關閉
+            try {
+                // 嘗試自動關閉視窗，僅當它是由 window.open 開啟時才有效
+                window.close();
+            } catch (e) {
+                console.warn("此頁面無法自動關閉 (可能不是由 JS 開啟), 請手動關閉。", e);
+                // 您可以在這裡添加一個提示用戶手動關閉的 UI
+            }
+        }
+
+        // Execute when the page loads
+        document.addEventListener('DOMContentLoaded', handleDeviceUUID);
     </script>
+    <p style="display: none;">裝置識別碼初始化完成。此頁面將自動關閉。</p>
 </body>
 </html>
