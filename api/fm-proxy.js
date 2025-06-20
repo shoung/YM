@@ -3,8 +3,8 @@
 // 從環境變數獲取敏感資訊
 // 注意：這裡使用 process.env.FM_ACCOUNT_NAME 和 process.env.FM_ACCOUNT_PASSWORD，
 // 假設這些是設定為 Vercel 的敏感環境變數，不以 NEXT_PUBLIC_ 開頭。
-const FM_SERVER_HOST = process.env.NEXT_PUBLIC_FM_SERVER_HOST; // 例如：'ym-fm.thebarkingdog.tw'
-const FM_DATABASE_NAME = process.env.NEXT_PUBLIC_FM_DATABASE_NAME; // 例如：'Cleaners'
+const FM_SERVER_HOST = process.env.FM_SERVER_HOST; // 例如：'ym-fm.thebarkingdog.tw'
+const FM_DATABASE_NAME = process.env.FM_DATABASE_NAME; // 例如：'Cleaners'
 const FM_ACCOUNT_NAME = process.env.FM_ACCOUNT_NAME; // 例如：'APIAPI'
 const FM_PASSWORD = process.env.FM_ACCOUNT_PASSWORD; // 例如：'youngman@!'
 
