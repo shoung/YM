@@ -3,196 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 打卡頁面</title>
-    <!-- Tailwind CSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>GPS 打卡</title>
     <style>
-        /* Custom styles for the message modal */
-        .modal {
-            display: none; /* Hidden by default */
-            position: fixed; /* Stay in place */
-            z-index: 100; /* Sit on top */
-            left: 0;
-            top: 0;
-            width: 100%; /* Full width */
-            height: 100%; /* Full height */
-            overflow: auto; /* Enable scroll if needed */
-            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-content {
-            background-color: #fefefe;
-            margin: auto;
-            padding: 20px;
-            border-radius: 1rem; /* Rounded corners */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            max-width: 90%;
-            width: 400px;
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
             text-align: center;
-            position: relative;
+            background-color: #f4f4f4;
+            color: #333;
         }
-
-        .close-button {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            color: #aaa;
-            font-size: 28px;
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            margin: 50px auto;
+        }
+        h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1em;
+            color: #555;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #e9ecef;
+            text-align: left;
+            word-wrap: break-word;
+        }
+        .warning {
+            color: #dc3545;
             font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close-button:hover,
-        .close-button:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
         }
     </style>
 </head>
-<body class="bg-gradient-to-r from-blue-400 to-purple-600 min-h-screen flex items-center justify-center p-4 font-sans text-gray-800">
-
-    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full transform transition-all duration-300 hover:scale-105">
-        <h1 class="text-3xl font-extrabold text-center text-indigo-700 mb-6 border-b-2 pb-3">GPS 打卡驗證</h1>
-        
-        <div class="space-y-4 mb-6">
-            <div id="status" class="text-center text-lg font-semibold text-gray-700">正在等待您的操作...</div>
-            <p id="duty-type-info" class="text-md text-purple-700 text-center bg-purple-50 p-2 rounded-lg"></p>
-            <p id="project-info" class="text-md text-teal-700 text-center bg-teal-50 p-2 rounded-lg"></p>
-            <p id="name-info" class="text-md text-orange-700 text-center bg-orange-50 p-2 rounded-lg"></p>
-            <p id="target-info" class="text-sm text-gray-600 text-center">目標位置 (模擬): 臺北 101 (經度: 121.564468, 緯度: 25.033964)</p>
-            <p id="user-location-info" class="text-md text-gray-700 text-center bg-blue-50 p-2 rounded-lg"></p>
-            <p id="distance-info" class="text-md text-gray-700 text-center bg-green-50 p-2 rounded-lg"></p>
-            <p id="accuracy-info" class="text-xs text-gray-500 text-center"></p>
-        </div>
-
-        <div class="flex flex-col space-y-4">
-            <button id="check-location-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transform transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
-                偵測位置並打卡
-            </button>
-            <button id="reset-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-full shadow-md transform transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50">
-                重置頁面
-            </button>
-        </div>
-    </div>
-
-    <!-- Custom Modal for messages -->
-    <div id="message-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" onclick="closeModal()">&times;</span>
-            <p id="modal-message" class="text-lg font-medium text-gray-800 mb-4"></p>
-            <button onclick="closeModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full">
-                確定
-            </button>
-        </div>
+<body>
+    <div class="container">
+        <h1>GPS 打卡系統</h1>
+        <div id="status">正在載入...</div>
+        <button id="checkInButton" style="display: none;">開始打卡</button>
+        <div id="result"></div>
     </div>
 
     <script>
-        // 設定您的 FileMaker 相關資訊
-        // 請將 'your_database_name' 替換為您的 FileMaker 資料庫名稱
-        // 請將 '打卡結果' 替換為您 FileMaker 中接收回傳的腳本名稱
-        // 請將 '上下班' 替換為您 FileMaker 中接收上下班狀態的字段名稱
-        // 請將 '專案' 替換為您 FileMaker 中接收專案名稱的字段名稱
-        // 請將 '姓名' 替換為您 FileMaker 中接收姓名的字段名稱
-        const FILEMAKER_DATABASE_NAME = 'your_database_name'; 
-        const FILEMAKER_SCRIPT_NAME = '打卡結果';
-        const FILEMAKER_DUTY_FIELD_NAME = '上下班'; // 新增的 FileMaker 字段名稱
-        const FILEMAKER_PROJECT_FIELD_NAME = '專案'; // 新增的 FileMaker 字段名稱
-        const FILEMAKER_NAME_FIELD_NAME = '姓名';   // 新增的 FileMaker 字段名稱
+        // FileMaker 相關配置
+        const FILEMAKER_SERVER = "YM"; // FileMaker Server 名稱
+        const FILEMAKER_DATABASE = "YM"; // 您的資料庫名稱
+        const FILEMAKER_LAYOUT = "L_打卡"; // 對應到您的打卡 Layout
+        const FILEMAKER_API_URL = `https://${FILEMAKER_SERVER}.filemakercloud.com/fmi/data/vLatest/databases/${FILEMAKER_DATABASE}/layouts/${FILEMAKER_LAYOUT}/_find`; // 範例 URL, 實際要調整為您的 Data API 根 URL
 
-        // 預設目標地址的座標 (這裡以臺北101作為範例)
-        // 在實際應用中，您可以從 URL 參數中獲取地址，然後使用 Geocoding API 將其轉換為經緯度
-        const TARGET_LATITUDE = 25.033964; // 臺北 101 緯度
-        const TARGET_LONGITUDE = 121.564468; // 臺北 101 經度
-        const DISTANCE_THRESHOLD_METERS = 100; // 方圓 100 公尺
+        // 從 Vercel 環境變數獲取 API 名稱和密碼 (Vercel 部署時會自動注入)
+        // 注意：在開發環境下，你需要手動設定這些變數或使用 .env 檔案
+        const API_USERNAME = 'APIAPI'; // 這個應該從 Vercel 環境變數取得
+        const API_PASSWORD = 'youngman@!'; // 這個應該從 Vercel 環境變數取得
 
-        // DOM 元素引用
-        const statusDiv = document.getElementById('status');
-        const dutyTypeInfo = document.getElementById('duty-type-info');
-        const projectInfo = document.getElementById('project-info'); // 新增的 DOM 元素
-        const nameInfo = document.getElementById('name-info');       // 新增的 DOM 元素
-        const userLocationInfo = document.getElementById('user-location-info');
-        const distanceInfo = document.getElementById('distance-info');
-        const accuracyInfo = document.getElementById('accuracy-info');
-        const checkLocationBtn = document.getElementById('check-location-btn');
-        const resetBtn = document.getElementById('reset-btn');
-        const messageModal = document.getElementById('message-modal');
-        const modalMessage = document.getElementById('modal-message');
+        let currentLatitude, currentLongitude;
+        let targetLocation = {}; // 用來儲存從 URL 參數傳過來的案點資訊
 
-        // 用來儲存從 URL 獲取的參數狀態
-        let currentDutyType = ''; 
-        let currentProject = '';
-        let currentName = '';
-
-        /**
-         * 顯示自訂訊息視窗
-         * @param {string} message - 要顯示的訊息
-         */
-        function showMessage(message) {
-            modalMessage.textContent = message;
-            messageModal.style.display = 'flex'; // Use flex to center the modal content
-        }
-
-        /**
-         * 關閉自訂訊息視窗
-         */
-        function closeModal() {
-            messageModal.style.display = 'none';
-        }
-
-        /**
-         * 重置頁面顯示狀態
-         */
-        function resetPage() {
-            statusDiv.textContent = '正在等待您的操作...';
-            dutyTypeInfo.textContent = '';
-            projectInfo.textContent = ''; // 重置專案資訊
-            nameInfo.textContent = '';   // 重置姓名資訊
-            userLocationInfo.textContent = '';
-            distanceInfo.textContent = '';
-            accuracyInfo.textContent = '';
-            checkLocationBtn.disabled = false;
-            checkLocationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            userLocationInfo.classList.remove('text-red-700');
-            distanceInfo.classList.remove('text-red-700');
-            statusDiv.classList.remove('text-green-600', 'text-red-600');
-            distanceInfo.classList.remove('bg-green-200', 'bg-red-200');
-            distanceInfo.classList.add('bg-green-50'); // 恢復預設背景
-            dutyTypeInfo.classList.remove('text-red-700');
-            currentDutyType = ''; // 清除儲存的上下班狀態
-            currentProject = '';  // 清除儲存的專案狀態
-            currentName = '';     // 清除儲存的姓名狀態
-        }
-
-        /**
-         * 解析 URL 中的查詢參數
-         * @returns {Object} 包含所有查詢參數的物件
-         */
-        function getUrlParams() {
-            const params = {};
-            window.location.search.substring(1).split('&').forEach(pair => {
-                const parts = pair.split('=');
-                if (parts[0]) {
-                    params[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1] || '');
-                }
-            });
-            return params;
-        }
-
-        /**
-         * 使用 Haversine 公式計算兩個經緯度點之間的距離 (單位: 公尺)
-         * @param {number} lat1 - 第一個點的緯度
-         * @param {number} lon1 - 第一個點的經度
-         * @param {number} lat2 - 第二個點的緯度
-         * @param {number} lon2 - 第二個點的經度
-         * @returns {number} 兩個點之間的距離 (公尺)
-         */
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // 地球半徑 (公尺)
-            const φ1 = lat1 * Math.PI / 180; // φ, λ in radians
+        // 輔助函數：計算兩點之間的距離 (Haversine 公式)
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // 地球半徑 (米)
+            const φ1 = lat1 * Math.PI / 180;
             const φ2 = lat2 * Math.PI / 180;
             const Δφ = (lat2 - lat1) * Math.PI / 180;
             const Δλ = (lon2 - lon1) * Math.PI / 180;
@@ -202,177 +93,205 @@
                       Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-            return R * c; // 距離 (公尺)
+            return R * c; // 距離單位：米
         }
 
-        /**
-         * 回傳結果給 FileMaker
-         * @param {boolean} success - 是否打卡成功 (對應 FileMaker 中的 "符合" / "不符合")
-         * @param {number} lat - 使用者的緯度
-         * @param {number} lon - 使用者的經度
-         * @param {string} timestamp - 時間戳 (ISO 格式)
-         * @param {string} dutyType - 上下班狀態 (例如: "上班", "下班")
-         * @param {string} project - 專案名稱
-         * @param {string} name - 姓名
-         * @param {string} [reason=''] - 失敗原因
-         */
-        function callbackToFileMaker(success, lat, lon, timestamp, dutyType, project, name, reason = '') {
-            let callbackUrl = `fmp://$/${FILEMAKER_DATABASE_NAME}?script=${FILEMAKER_SCRIPT_NAME}`;
-            
-            // 包含所有參數
-            callbackUrl += `&${FILEMAKER_DUTY_FIELD_NAME}=${encodeURIComponent(dutyType)}`;
-            callbackUrl += `&${FILEMAKER_PROJECT_FIELD_NAME}=${encodeURIComponent(project)}`; // 新增專案參數
-            callbackUrl += `&${FILEMAKER_NAME_FIELD_NAME}=${encodeURIComponent(name)}`;     // 新增姓名參數
-            callbackUrl += `&time=${encodeURIComponent(timestamp)}`; // 時間戳
-
-            // GPS 驗證結果
-            if (success) {
-                callbackUrl += `&param=${encodeURIComponent('符合')}`; // 將 "成功" 改為 "符合"
-                callbackUrl += `&lat=${encodeURIComponent(lat)}`;
-                callbackUrl += `&lon=${encodeURIComponent(lon)}`;
-            } else {
-                callbackUrl += `&param=${encodeURIComponent('不符合')}`; // 將 "失敗" 改為 "不符合"
-                callbackUrl += `&reason=${encodeURIComponent(reason)}`;
-                // 失敗時也傳送經緯度，方便排查問題
-                callbackUrl += `&lat=${encodeURIComponent(lat)}`;
-                callbackUrl += `&lon=${encodeURIComponent(lon)}`;
+        // 獲取 URL 參數
+        function getUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            targetLocation.caseName = urlParams.get('caseName') || '未知案點';
+            targetLocation.targetLat = parseFloat(urlParams.get('lat'));
+            targetLocation.targetLon = parseFloat(urlParams.get('lon'));
+            if (isNaN(targetLocation.targetLat) || isNaN(targetLocation.targetLon)) {
+                targetLocation = null; // 如果經緯度無效，則設為 null
             }
-            
-            // 嘗試打開 FileMaker URL
-            window.location.href = callbackUrl;
-
-            // 為了測試方便，也可以在這裡顯示 callbackUrl
-            console.log("FileMaker Callback URL:", callbackUrl);
         }
 
-        /**
-         * 處理 GPS 位置檢測
-         */
-        function handleLocationCheck() {
-            checkLocationBtn.disabled = true;
-            checkLocationBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            statusDiv.textContent = '正在偵測您的 GPS 位置...';
-
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const userLat = position.coords.latitude;
-                        const userLon = position.coords.longitude;
-                        const userAccuracy = position.coords.accuracy; // 精度 (公尺)
-                        const currentTime = new Date().toISOString();
-
-                        userLocationInfo.textContent = `您的位置: 緯度 ${userLat.toFixed(6)}, 經度 ${userLon.toFixed(6)}`;
-                        accuracyInfo.textContent = `GPS 精度: ± ${userAccuracy.toFixed(2)} 公尺`;
-
-                        const distance = calculateDistance(userLat, userLon, TARGET_LATITUDE, TARGET_LONGITUDE);
-                        distanceInfo.textContent = `距離目標: ${distance.toFixed(2)} 公尺`;
-
-                        if (distance <= DISTANCE_THRESHOLD_METERS) {
-                            statusDiv.textContent = '打卡成功！';
-                            statusDiv.classList.remove('text-gray-700');
-                            statusDiv.classList.add('text-green-600');
-                            distanceInfo.classList.remove('bg-green-50', 'bg-red-200');
-                            distanceInfo.classList.add('bg-green-200');
-                            showMessage(`打卡成功！您在目標位置 ${DISTANCE_THRESHOLD_METERS} 公尺範圍內。`);
-                            callbackToFileMaker(true, userLat, userLon, currentTime, currentDutyType, currentProject, currentName);
-                        } else {
-                            statusDiv.textContent = '打卡失敗！';
-                            statusDiv.classList.remove('text-gray-700');
-                            statusDiv.classList.add('text-red-600');
-                            userLocationInfo.classList.add('text-red-700');
-                            distanceInfo.classList.remove('bg-green-50', 'bg-green-200');
-                            distanceInfo.classList.add('bg-red-200');
-                            showMessage(`打卡失敗！您距離目標 ${distance.toFixed(2)} 公尺，超過 ${DISTANCE_THRESHOLD_METERS} 公尺範圍。`);
-                            callbackToFileMaker(false, userLat, userLon, currentTime, currentDutyType, currentProject, currentName, '距離過遠');
+        // 獲取用戶 GPS 定位
+        function getGPSLocation() {
+            return new Promise((resolve, reject) => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            currentLatitude = position.coords.latitude;
+                            currentLongitude = position.coords.longitude;
+                            resolve({ lat: currentLatitude, lon: currentLongitude });
+                        },
+                        (error) => {
+                            let errorMessage;
+                            switch(error.code) {
+                                case error.PERMISSION_DENIED:
+                                    errorMessage = "使用者拒絕了地理位置請求。請允許瀏覽器獲取位置資訊。";
+                                    break;
+                                case error.POSITION_UNAVAILABLE:
+                                    errorMessage = "地理位置資訊不可用。";
+                                    break;
+                                case error.TIMEOUT:
+                                    errorMessage = "獲取地理位置超時。";
+                                    break;
+                                case error.UNKNOWN_ERROR:
+                                    errorMessage = "發生未知錯誤。";
+                                    break;
+                            }
+                            document.getElementById('status').innerText = `獲取位置失敗: ${errorMessage}`;
+                            reject(new Error(`獲取位置失敗: ${errorMessage}`));
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0
                         }
-                    },
-                    (error) => {
-                        statusDiv.textContent = '取得 GPS 位置失敗！';
-                        statusDiv.classList.remove('text-gray-700');
-                        statusDiv.classList.add('text-red-600');
-                        checkLocationBtn.disabled = false; // 允許重試
-                        checkLocationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-
-                        let errorMessage = '未知錯誤。';
-                        switch (error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage = '您已拒絕位置授權。請允許瀏覽器存取您的位置。';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage = '位置資訊無法取得。請檢查您的 GPS 訊號。';
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage = '取得位置超時。請確保網路連線良好。';
-                                break;
-                        }
-                        userLocationInfo.textContent = `錯誤: ${errorMessage}`;
-                        userLocationInfo.classList.add('text-red-700');
-                        showMessage(`取得 GPS 位置失敗！\n錯誤: ${errorMessage}`);
-                        // 即使失敗，也傳送當前可用的經緯度 (0,0 表示無法取得)
-                        callbackToFileMaker(false, 0, 0, new Date().toISOString(), currentDutyType, currentProject, currentName, `GPS_Error:${error.code}`);
-                    },
-                    {
-                        enableHighAccuracy: true, // 請求高精度位置
-                        timeout: 10000,           // 10 秒超時
-                        maximumAge: 0             // 不使用快取的位置
-                    }
-                );
-            } else {
-                statusDiv.textContent = '您的瀏覽器不支援地理定位！';
-                statusDiv.classList.remove('text-gray-700');
-                statusDiv.classList.add('text-red-600');
-                userLocationInfo.classList.add('text-red-700');
-                showMessage('您的瀏覽器不支援地理定位功能。');
-                callbackToFileMaker(false, 0, 0, new Date().toISOString(), currentDutyType, currentProject, currentName, 'Browser_GPS_Not_Supported');
-            }
-        }
-
-        // 事件監聽器
-        checkLocationBtn.addEventListener('click', handleLocationCheck);
-        resetBtn.addEventListener('click', resetPage);
-
-        // 初始化：在頁面載入時，嘗試解析 URL 參數，並顯示相關資訊
-        document.addEventListener('DOMContentLoaded', () => {
-            const params = getUrlParams();
-            
-            // 處理地址參數
-            if (params.address) {
-                document.getElementById('target-info').textContent = `目標地址 (從 FileMaker 取得的地址參數): "${params.address}" - (目前使用模擬座標: 臺北 101)`;
-            } else {
-                document.getElementById('target-info').textContent = `沒有從 URL 收到地址參數。目前使用模擬目標位置 (臺北 101)。`;
-            }
-
-            // 處理上下班參數
-            if (params.duty) {
-                currentDutyType = params.duty;
-                dutyTypeInfo.textContent = `本次打卡為: ${currentDutyType}`;
-                if (currentDutyType !== '上班' && currentDutyType !== '下班') {
-                    dutyTypeInfo.classList.add('text-red-700');
-                    showMessage(`偵測到無效的上下班參數: "${currentDutyType}"。建議使用 "上班" 或 "下班"。`);
+                    );
+                } else {
+                    document.getElementById('status').innerText = "您的瀏覽器不支持地理位置。";
+                    reject(new Error("瀏覽器不支持地理位置。"));
                 }
-            } else {
-                dutyTypeInfo.textContent = `沒有從 URL 收到上下班參數 (duty)。`;
-                dutyTypeInfo.classList.add('text-gray-500'); // 灰色顯示
-            }
+            });
+        }
 
-            // 處理專案參數
-            if (params.project) {
-                currentProject = params.project;
-                projectInfo.textContent = `專案: ${currentProject}`;
-            } else {
-                projectInfo.textContent = `沒有從 URL 收到專案參數 (project)。`;
-                projectInfo.classList.add('text-gray-500');
-            }
+        // 登入 FileMaker Data API 並獲取 token
+        async function getFileMakerToken() {
+            const authString = btoa(`${API_USERNAME}:${API_PASSWORD}`);
+            const loginUrl = `https://${FILEMAKER_SERVER}.filemakercloud.com/fmi/data/vLatest/databases/${FILEMAKER_DATABASE}/sessions`;
 
-            // 處理姓名參數
-            if (params.name) {
-                currentName = params.name;
-                nameInfo.textContent = `姓名: ${currentName}`;
-            } else {
-                nameInfo.textContent = `沒有從 URL 收到姓名參數 (name)。`;
-                nameInfo.classList.add('text-gray-500');
+            try {
+                const response = await fetch(loginUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Basic ${authString}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`FileMaker API 登入失敗: ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                const data = await response.json();
+                return data.response.token;
+            } catch (error) {
+                console.error("獲取 FileMaker Token 錯誤:", error);
+                document.getElementById('status').innerHTML = `<span class="warning">FileMaker 登入失敗: ${error.message}</span>`;
+                throw error; // 重新拋出錯誤，以便調用者處理
             }
+        }
+
+        // 將 GPS 資料寫入 FileMaker
+        async function writeGPSDataToFileMaker(latitude, longitude, validationStatus) {
+            let token = null;
+            try {
+                token = await getFileMakerToken();
+                const createRecordUrl = `https://${FILEMAKER_SERVER}.filemakercloud.com/fmi/data/vLatest/databases/${FILEMAKER_DATABASE}/layouts/${FILEMAKER_LAYOUT}/records`;
+
+                const data = {
+                    fieldData: {
+                        "GPS_緯度": latitude.toString(), // 請確保您的 FileMaker 字段是文本類型或數字類型
+                        "GPS_經度": longitude.toString(),
+                        "GPS_驗證": validationStatus,
+                        "打卡時間": new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }) // 記錄台灣時間
+                    }
+                };
+
+                const response = await fetch(createRecordUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`寫入 FileMaker 失敗: ${response.status} ${response.statusText} - ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log("寫入 FileMaker 成功:", result);
+                document.getElementById('result').innerHTML += `<br>資料已成功寫入 FileMaker！`;
+
+            } catch (error) {
+                console.error("寫入 FileMaker 錯誤:", error);
+                document.getElementById('result').innerHTML += `<br><span class="warning">寫入 FileMaker 失敗: ${error.message}</span>`;
+            } finally {
+                // 無論成功失敗，都嘗試登出
+                if (token) {
+                    try {
+                        const logoutUrl = `https://${FILEMAKER_SERVER}.filemakercloud.com/fmi/data/vLatest/databases/${FILEMAKER_DATABASE}/sessions/${token}`;
+                        await fetch(logoutUrl, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        console.log("FileMaker Token 已登出。");
+                    } catch (logoutError) {
+                        console.error("FileMaker Token 登出失敗:", logoutError);
+                    }
+                }
+            }
+        }
+
+        // 主打卡邏輯
+        async function performCheckIn() {
+            document.getElementById('status').innerText = '正在獲取您的位置...';
+            document.getElementById('checkInButton').style.display = 'none';
+            document.getElementById('result').innerHTML = ''; // 清空之前的結果
+
+            try {
+                const { lat, lon } = await getGPSLocation();
+                document.getElementById('status').innerText = `已獲取您的位置：緯度 ${lat.toFixed(6)}, 經度 ${lon.toFixed(6)}`;
+                document.getElementById('result').innerHTML += `<p>您的位置：緯度 ${lat.toFixed(6)}, 經度 ${lon.toFixed(6)}</p>`;
+
+                let validationStatus = "未驗證"; // 預設值
+
+                if (targetLocation && targetLocation.targetLat && targetLocation.targetLon) {
+                    const distance = getDistance(lat, lon, targetLocation.targetLat, targetLocation.targetLon);
+                    document.getElementById('result').innerHTML += `<p>距離案點 "${targetLocation.caseName}" 約 ${distance.toFixed(2)} 公尺。</p>`;
+
+                    if (distance <= 100) {
+                        validationStatus = "在範圍內";
+                        document.getElementById('result').innerHTML += `<p style="color: green;">恭喜！您在案點 "${targetLocation.caseName}" 的 100 公尺範圍內。</p>`;
+                        await writeGPSDataToFileMaker(lat, lon, validationStatus);
+                    } else {
+                        validationStatus = "超出範圍";
+                        document.getElementById('result').innerHTML += `<p class="warning">警告：您超出案點 "${targetLocation.caseName}" 的 100 公尺範圍 (${distance.toFixed(2)} 公尺)。</p>`;
+
+                        const confirmWrite = confirm(`您超出案點 "${targetLocation.caseName}" 的 100 公尺範圍 (${distance.toFixed(2)} 公尺)。確定要繼續打卡嗎？`);
+                        if (confirmWrite) {
+                            await writeGPSDataToFileMaker(lat, lon, validationStatus);
+                        } else {
+                            document.getElementById('result').innerHTML += `<p>已取消打卡。</p>`;
+                        }
+                    }
+                } else {
+                    document.getElementById('result').innerHTML += `<p class="warning">未接收到有效的案點目標經緯度資訊，將直接記錄您的位置。</p>`;
+                    validationStatus = "無案點驗證";
+                    await writeGPSDataToFileMaker(lat, lon, validationStatus);
+                }
+
+            } catch (error) {
+                console.error("打卡失敗:", error);
+                document.getElementById('status').innerHTML = `<span class="warning">打卡過程發生錯誤: ${error.message}</span>`;
+            } finally {
+                document.getElementById('checkInButton').style.display = 'block'; // 再次顯示按鈕
+                document.getElementById('checkInButton').innerText = '重新打卡';
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            getUrlParams(); // 解析 URL 參數
+            if (targetLocation) {
+                document.getElementById('status').innerText = `準備為案點 "${targetLocation.caseName}" 進行打卡...`;
+            } else {
+                document.getElementById('status').innerText = `未提供案點資訊，將直接記錄您的位置。`;
+            }
+            document.getElementById('checkInButton').style.display = 'block'; // 顯示按鈕
+            document.getElementById('checkInButton').addEventListener('click', performCheckIn);
         });
+
     </script>
 </body>
 </html>
