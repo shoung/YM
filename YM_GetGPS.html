@@ -70,15 +70,6 @@
     </div>
 
     <script>
-        // FileMaker Data API 憑證和伺服器 URL (請務必替換為您的實際值)
-        // !!! 安全警告 !!!: 將憑證硬編碼在前端頁面存在極大安全風險。
-        // 由於純 JavaScript 頁面無法直接讀取 Vercel 環境變數，
-        // 您在部署後需要手動替換以下佔位符為您在 Vercel 環境變數中設定的實際值。
-        // 建議在生產環境中使用伺服器端代理來處理 API 請求，以保護您的憑證。
-        const FILEMAKER_API_USERNAME = 'YOUR_VERCEL_FM_USERNAME'; // 請手動替換為您的 FileMaker Data API 使用者名稱
-        const FILEMAKER_API_PASSWORD = 'YOUR_VERCEL_FM_PASSWORD'; // 請手動替換為您的 FileMaker Data API 密碼
-        const FILEMAKER_SERVER_URL = 'https://YOUR_VERCEL_FM_SERVER_URL'; // 請手動替換為您的 FileMaker Server 完整 URL (包含 https://)
-
         // FileMaker 資料庫和佈局名稱 (已根據您的要求直接寫入程式碼)
         const FILEMAKER_DATABASE_NAME = 'L_打卡';
         const FILEMAKER_LAYOUT_NAME = 'L_我的打卡一覽';
@@ -86,6 +77,9 @@
         // FileMaker 字段名稱
         const LATITUDE_FIELD = 'A上班_GPS_緯度';  // 緯度字段名稱
         const LONGITUDE_FIELD = 'A上班_GPS_經度'; // 經度字段名稱
+
+        // 代理伺服器端點 (將指向您在 Vercel 上部署的 Serverless Function)
+        const PROXY_API_ENDPOINT = '/api/update-gps'; // 例如: /api/update-gps
 
         // DOM 元素引用
         const statusDiv = document.getElementById('status');
@@ -95,7 +89,6 @@
 
         // 從 URL 參數獲取的 FileMaker 記錄 ID
         let recordId = '';
-        let token = ''; // FileMaker Data API 認證 token
 
         /**
          * 顯示狀態訊息並記錄到控制台
@@ -142,103 +135,46 @@
         }
 
         /**
-         * 認證 FileMaker Data API 並獲取 token
-         * @returns {Promise<string>} 認證 token
-         */
-        async function authenticateFileMaker() {
-            updateStatus('正在認證 FileMaker Data API...', 'info');
-
-            const authUrl = `${FILEMAKER_SERVER_URL}/fmi/data/vLatest/databases/${FILEMAKER_DATABASE_NAME}/sessions`;
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': 'Basic ' + btoa(`${FILEMAKER_API_USERNAME}:${FILEMAKER_API_PASSWORD}`)
-            };
-
-            try {
-                const response = await fetch(authUrl, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({}) // 空的 body 即可
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`認證失敗: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
-                }
-
-                const data = await response.json();
-                token = data.response.token;
-                updateStatus('FileMaker 認證成功。', 'info');
-                return token;
-            } catch (error) {
-                updateStatus(`FileMaker 認證錯誤: ${error.message}`, 'error');
-                throw error;
-            }
-        }
-
-        /**
-         * 更新 FileMaker 記錄
+         * 透過代理伺服器更新 FileMaker 記錄
          * @param {number} latitude - 緯度
          * @param {number} longitude - 經度
-         * @param {string} token - 認證 token
          */
-        async function updateFileMakerRecord(latitude, longitude, token) {
-            updateStatus('正在回傳 GPS 座標至 FileMaker...', 'info');
+        async function updateFileMakerRecordViaProxy(latitude, longitude) {
+            updateStatus('正在透過代理伺服器回傳 GPS 座標至 FileMaker...', 'info');
 
-            const updateUrl = `${FILEMAKER_SERVER_URL}/fmi/data/vLatest/databases/${FILEMAKER_DATABASE_NAME}/layouts/${FILEMAKER_LAYOUT_NAME}/records/${recordId}`;
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            };
-            const body = {
-                fieldData: {
-                    [LATITUDE_FIELD]: latitude,
-                    [LONGITUDE_FIELD]: longitude
-                }
+            const payload = {
+                database: FILEMAKER_DATABASE_NAME,
+                layout: FILEMAKER_LAYOUT_NAME,
+                recordId: recordId,
+                latitude: latitude,
+                longitude: longitude,
+                latitudeField: LATITUDE_FIELD,
+                longitudeField: LONGITUDE_FIELD
             };
 
             try {
-                const response = await fetch(updateUrl, {
-                    method: 'PATCH', // 使用 PATCH 進行部分更新
-                    headers: headers,
-                    body: JSON.stringify(body)
+                const response = await fetch(PROXY_API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(`更新記錄失敗: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+                    throw new Error(`代理伺服器回傳失敗: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
                 }
 
                 const data = await response.json();
-                updateStatus('GPS 座標已成功回傳 FileMaker！', 'success');
+                if (data.success) {
+                    updateStatus('GPS 座標已成功回傳 FileMaker！', 'success');
+                } else {
+                    throw new Error(`FileMaker API 錯誤: ${data.message || '未知錯誤'}`);
+                }
             } catch (error) {
                 updateStatus(`GPS 座標回傳失敗: ${error.message}`, 'error');
-                throw error;
-            } finally {
-                // 無論成功或失敗，都嘗試登出 session (建議)
-                await logoutFileMaker(token);
-            }
-        }
-
-        /**
-         * 登出 FileMaker Data API session
-         * @param {string} token - 認證 token
-         */
-        async function logoutFileMaker(token) {
-            if (!token) return;
-            const logoutUrl = `${FILEMAKER_SERVER_URL}/fmi/data/vLatest/databases/${FILEMAKER_DATABASE_NAME}/sessions/${token}`;
-            try {
-                await fetch(logoutUrl, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                console.log('FileMaker session 已登出。');
-            } catch (error) {
-                console.error('FileMaker session 登出錯誤:', error);
-            } finally {
-                token = '';
+                throw error; // 重新拋出錯誤以便上層捕獲
             }
         }
 
@@ -253,7 +189,6 @@
             // 確保 FileMaker 記錄 ID 參數存在
             if (!parseUrlParams()) {
                 // 錯誤訊息已在 parseUrlParams 中處理，直接結束
-                // 嘗試關閉頁面 (可能不會成功)
                 setTimeout(() => window.close(), 2000);
                 return;
             }
@@ -269,12 +204,9 @@
                         accuracyInfo.textContent = `精度: ± ${userAccuracy.toFixed(2)} 公尺`;
 
                         try {
-                            const authToken = await authenticateFileMaker();
-                            if (authToken) {
-                                await updateFileMakerRecord(userLat, userLon, authToken);
-                            }
+                            await updateFileMakerRecordViaProxy(userLat, userLon);
                         } catch (apiError) {
-                            // 錯誤已在各自函數中處理
+                            // 錯誤已在 updateFileMakerRecordViaProxy 中處理
                             console.error('API 操作流程中斷:', apiError);
                         } finally {
                             // 無論成功或失敗，延遲後嘗試關閉頁面
