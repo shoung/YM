@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS 地理編碼與回傳</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* 讓頁面盡可能簡潔，只顯示中央的狀態訊息 */
+            background-color: #f0f0f0; /* 淺灰色背景 */
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', sans-serif; /* 使用 Inter 字體 */
+            color: #333;
+            margin: 0;
+            overflow: hidden; /* 防止滾動條 */
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 1rem; /* 圓角 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* 陰影 */
+            text-align: center;
+            max-width: 350px; /* 限制最大寬度 */
+            width: 90%; /* 響應式寬度 */
+            opacity: 0; /* 初始隱藏，JS載入後顯示 */
+            animation: fadeIn 0.5s forwards; /* 淡入動畫 */
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .status-text {
+            font-size: 1.25rem; /* 大一點的字體 */
+            font-weight: 600; /* 粗體 */
+            color: #4a5568; /* 深灰色 */
+        }
+        .info-text {
+            font-size: 0.875rem; /* 小字體 */
+            color: #718096; /* 中灰色 */
+            margin-top: 10px;
+        }
+        .error-text {
+            color: #e53e3e; /* 紅色錯誤文字 */
+        }
+        .success-text {
+            color: #38a169; /* 綠色成功文字 */
+        }
+        .warning-text { /* 新增的警語樣式 */
+            font-size: 0.75rem; /* 更小的字體 */
+            color: #f59e0b; /* 琥珀色 */
+            margin-top: 20px; /* 與上方內容間距 */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 class="text-xl font-bold mb-4">GPS 地理編碼與回傳中...</h1>
+        <div id="status" class="status-text">初始化中...</div>
+        <p id="address-info" class="info-text"></p>
+        <p id="fm-info" class="info-text"></p>
+        <p id="geocoded-location-info" class="info-text"></p>
+        <!-- 新增的警語顯示區塊 -->
+        <p id="close-warning" class="warning-text">如果頁面沒有自動關閉，請自行關閉本頁面。</p>
+    </div>
+
+    <script>
+        // Google Maps Geocoding API Key 已從前端移除，現在由代理伺服器處理。
+
+        // FileMaker 資料庫和佈局名稱 (已根據您的要求直接寫入程式碼)
+        const FILEMAKER_DATABASE_NAME = 'YM14'; 
+        const FILEMAKER_LAYOUT_NAME = '客戶列表';
+
+        // FileMaker 字段名稱
+        const LATITUDE_FIELD = 'GPS緯度';  // 緯度字段名稱
+        const LONGITUDE_FIELD = 'GPS經度'; // 經度字段名稱
+
+        // 代理伺服器端點 (將指向您在 Vercel 上部署的 Serverless Function)
+        // 這個端點現在將處理地理編碼和 FileMaker 更新
+        const PROXY_API_ENDPOINT = '/api/update-gps'; 
+
+        // DOM 元素引用
+        const statusDiv = document.getElementById('status');
+        const addressInfoDiv = document.getElementById('address-info');
+        const fmInfoDiv = document.getElementById('fm-info');
+        const geocodedLocationInfo = document.getElementById('geocoded-location-info');
+
+        // 從 URL 參數獲取的資訊
+        let targetAddress = '';
+        let recordId = '';
+
+        /**
+         * 顯示狀態訊息並記錄到控制台
+         * @param {string} message - 要顯示的訊息
+         * @param {string} type - 訊息類型 ('info', 'error', 'success')
+         */
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-text'; // 重置類別
+            if (type === 'error') {
+                statusDiv.classList.add('error-text');
+                console.error(message);
+            } else if (type === 'success') {
+                statusDiv.classList.add('success-text');
+                console.log(message);
+            } else {
+                console.log(message);
+            }
+        }
+
+        /**
+         * 解析 URL 中的查詢參數並設定相關資訊
+         * @returns {boolean} 如果所有必要參數都存在則返回 true，否則返回 false
+         */
+        function parseUrlParams() {
+            const params = {};
+            window.location.search.substring(1).split('&').forEach(pair => {
+                const parts = pair.split('=');
+                if (parts[0]) {
+                    params[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1] || '');
+                }
+            });
+
+            targetAddress = params.address || '';
+            recordId = params.recordId || '';
+
+            if (targetAddress && recordId) {
+                addressInfoDiv.textContent = `地址: ${targetAddress}`;
+                fmInfoDiv.textContent = `FM: ${FILEMAKER_DATABASE_NAME} / ${FILEMAKER_LAYOUT_NAME} / ID:${recordId}`;
+                return true;
+            } else {
+                addressInfoDiv.textContent = '錯誤: 缺少地址或記錄 ID 參數。';
+                fmInfoDiv.textContent = ''; // 清空 FM 資訊
+                updateStatus('錯誤：缺少地址 (address) 或記錄 ID (recordId) 參數。請確認 URL 包含這些參數。', 'error');
+                return false;
+            }
+        }
+
+        /**
+         * 透過代理伺服器處理地理編碼並更新 FileMaker 記錄
+         * @param {string} address - 要地理編碼的地址
+         */
+        async function geocodeAndUpdateFileMakerViaProxy(address) {
+            updateStatus('正在透過代理伺服器處理地理編碼並回傳 FileMaker...', 'info');
+
+            const payload = {
+                address: address, // 將地址傳遞給代理伺服器
+                database: FILEMAKER_DATABASE_NAME,
+                layout: FILEMAKER_LAYOUT_NAME,
+                recordId: recordId,
+                latitudeField: LATITUDE_FIELD,
+                longitudeField: LONGITUDE_FIELD
+            };
+
+            try {
+                const response = await fetch(PROXY_API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                // 嘗試解析為 JSON，如果失敗則讀取文本
+                let data;
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`非預期的伺服器響應格式。預期 JSON，但收到: ${text.substring(0, 100)}...`); // 顯示部分文本
+                }
+
+                if (!response.ok) {
+                    // 如果響應狀態碼不是 2xx，即使是 JSON 也視為錯誤
+                    throw new Error(`代理伺服器回傳失敗: ${response.status} ${response.statusText} - ${JSON.stringify(data)}`);
+                }
+
+                if (data.success) {
+                    geocodedLocationInfo.textContent = `地理編碼結果: 緯度 ${data.latitude.toFixed(6)}, 經度 ${data.longitude.toFixed(6)}`;
+                    updateStatus('GPS 座標已成功回傳 FileMaker！', 'success');
+                } else {
+                    throw new Error(`代理伺服器處理失敗: ${data.message || '未知錯誤'}`);
+                }
+            } catch (error) {
+                updateStatus(`GPS 座標回傳失敗: ${error.message}`, 'error');
+                throw error; // 重新拋出錯誤以便上層捕獲
+            }
+        }
+
+        /**
+         * 主執行函數：處理地址地理編碼與 FileMaker 回傳
+         */
+        async function executeGeocodingAndFmUpdate() {
+            updateStatus('初始化中...', 'info');
+            addressInfoDiv.textContent = '';
+            fmInfoDiv.textContent = '';
+            geocodedLocationInfo.textContent = '';
+
+            // 確保 URL 參數存在
+            if (!parseUrlParams()) {
+                // 錯誤訊息已在 parseUrlParams 中處理，直接結束
+                setTimeout(() => window.close(), 2000);
+                return;
+            }
+
+            try {
+                // 透過代理伺服器處理地理編碼並回傳 FileMaker
+                await geocodeAndUpdateFileMakerViaProxy(targetAddress);
+            } catch (error) {
+                // 錯誤已在各自函數中處理
+                console.error('操作流程中斷:', error);
+            } finally {
+                // 無論成功或失敗，延遲後嘗試關閉頁面
+                setTimeout(() => window.close(), 2000); // 延遲 2 秒後關閉
+            }
+        }
+
+        // 頁面載入後立即執行主函數
+        document.addEventListener('DOMContentLoaded', executeGeocodingAndFmUpdate);
+    </script>
+</body>
+</html>
