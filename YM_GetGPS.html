@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS 座標自動回傳</title>
+    <title>GPS 地理編碼與回傳</title>
     <!-- Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -55,40 +55,61 @@
             color: #f59e0b; /* 琥珀色 */
             margin-top: 20px; /* 與上方內容間距 */
         }
+        .close-button-manual { /* 手動關閉按鈕樣式 */
+            margin-top: 20px;
+            background-color: #6b7280; /* 灰色背景 */
+            color: white;
+            padding: 10px 20px;
+            border-radius: 9999px; /* 圓角 */
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            cursor: pointer;
+            border: none; /* 移除邊框 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .close-button-manual:hover {
+            background-color: #4b5563; /* 懸停時顏色變深 */
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1 class="text-xl font-bold mb-4">GPS 自動回傳中...</h1>
+        <h1 class="text-xl font-bold mb-4">GPS 地理編碼與回傳中...</h1>
         <div id="status" class="status-text">初始化中...</div>
+        <p id="address-info" class="info-text"></p>
         <p id="fm-info" class="info-text"></p>
-        <p id="user-location-info" class="info-text"></p>
-        <p id="accuracy-info" class="info-text"></p>
+        <p id="geocoded-location-info" class="info-text"></p>
         <!-- 新增的警語顯示區塊 -->
         <p id="close-warning" class="warning-text">如果頁面沒有自動關閉，請自行關閉本頁面。</p>
+
+        <!-- 手動關閉按鈕 -->
+        <button id="manual-close-btn" class="close-button-manual">
+            手動關閉本頁
+        </button>
     </div>
 
     <script>
         // FileMaker 資料庫和佈局名稱 (已根據您的要求直接寫入程式碼)
-        const FILEMAKER_DATABASE_NAME = 'L_打卡';
-        const FILEMAKER_DATABASE_NAME = 'Cleaners';
-        const FILEMAKER_LAYOUT_NAME = 'L_我的打卡一覽';
+        const FILEMAKER_DATABASE_NAME = 'YM14'; 
+        const FILEMAKER_LAYOUT_NAME = '客戶列表';
 
         // FileMaker 字段名稱
-        const LATITUDE_FIELD = 'A上班_GPS_緯度';  // 緯度字段名稱
-        const LONGITUDE_FIELD = 'A上班_GPS_經度'; // 經度字段名稱
+        const LATITUDE_FIELD = 'GPS緯度';  // 緯度字段名稱
+        const LONGITUDE_FIELD = 'GPS經度'; // 經度字段名稱
 
         // 代理伺服器端點 (將指向您在 Vercel 上部署的 Serverless Function)
-        const PROXY_API_ENDPOINT = '/api/update-gps'; // 例如: /api/update-gps
+        const PROXY_API_ENDPOINT = '/api/AdressToGPS'; 
 
         // DOM 元素引用
         const statusDiv = document.getElementById('status');
+        const addressInfoDiv = document.getElementById('address-info');
         const fmInfoDiv = document.getElementById('fm-info');
-        const userLocationInfo = document.getElementById('user-location-info');
-        const accuracyInfo = document.getElementById('accuracy-info');
+        const geocodedLocationInfo = document.getElementById('geocoded-location-info');
+        const manualCloseBtn = document.getElementById('manual-close-btn'); // 手動關閉按鈕
 
-        // 從 URL 參數獲取的 FileMaker 記錄 ID
+        // 從 URL 參數獲取的資訊
+        let targetAddress = '';
         let recordId = '';
 
         /**
@@ -111,8 +132,8 @@
         }
 
         /**
-         * 解析 URL 中的查詢參數並設定 FileMaker 記錄 ID
-         * @returns {boolean} 如果 recordId 存在則返回 true，否則返回 false
+         * 解析 URL 中的查詢參數並設定相關資訊
+         * @returns {boolean} 如果所有必要參數都存在則返回 true，否則返回 false
          */
         function parseUrlParams() {
             const params = {};
@@ -123,32 +144,33 @@
                 }
             });
 
-            recordId = params.recordId || ''; // recordId 必須從 URL 獲取
+            targetAddress = params.address || '';
+            recordId = params.recordId || '';
 
-            if (recordId) {
+            if (targetAddress && recordId) {
+                addressInfoDiv.textContent = `地址: ${targetAddress}`;
                 fmInfoDiv.textContent = `FM: ${FILEMAKER_DATABASE_NAME} / ${FILEMAKER_LAYOUT_NAME} / ID:${recordId}`;
                 return true;
             } else {
-                fmInfoDiv.textContent = '錯誤: 缺少 FileMaker 記錄 ID (recordId) 參數。';
-                updateStatus('錯誤：缺少 FileMaker 記錄 ID (recordId) 參數。請確認 URL 包含 recordId。', 'error');
+                addressInfoDiv.textContent = '錯誤: 缺少地址或記錄 ID 參數。';
+                fmInfoDiv.textContent = ''; // 清空 FM 資訊
+                updateStatus('錯誤：缺少地址 (address) 或記錄 ID (recordId) 參數。請確認 URL 包含這些參數。', 'error');
                 return false;
             }
         }
 
         /**
-         * 透過代理伺服器更新 FileMaker 記錄
-         * @param {number} latitude - 緯度
-         * @param {number} longitude - 經度
+         * 透過代理伺服器處理地理編碼並更新 FileMaker 記錄
+         * @param {string} address - 要地理編碼的地址
          */
-        async function updateFileMakerRecordViaProxy(latitude, longitude) {
-            updateStatus('正在透過代理伺服器回傳 GPS 座標至 FileMaker...', 'info');
+        async function geocodeAndUpdateFileMakerViaProxy(address) {
+            updateStatus('正在透過代理伺服器處理地理編碼並回傳 FileMaker...', 'info');
 
             const payload = {
+                address: address, // 將地址傳遞給代理伺服器
                 database: FILEMAKER_DATABASE_NAME,
                 layout: FILEMAKER_LAYOUT_NAME,
                 recordId: recordId,
-                latitude: latitude,
-                longitude: longitude,
                 latitudeField: LATITUDE_FIELD,
                 longitudeField: LONGITUDE_FIELD
             };
@@ -162,16 +184,26 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`代理伺服器回傳失敗: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+                // 嘗試解析為 JSON，如果失敗則讀取文本
+                let data;
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`非預期的伺服器響應格式。預期 JSON，但收到: ${text.substring(0, 100)}...`); // 顯示部分文本
                 }
 
-                const data = await response.json();
+                if (!response.ok) {
+                    // 如果響應狀態碼不是 2xx，即使是 JSON 也視為錯誤
+                    throw new Error(`代理伺服器回傳失敗: ${response.status} ${response.statusText} - ${JSON.stringify(data)}`);
+                }
+
                 if (data.success) {
+                    geocodedLocationInfo.textContent = `地理編碼結果: 緯度 ${data.latitude.toFixed(6)}, 經度 ${data.longitude.toFixed(6)}`;
                     updateStatus('GPS 座標已成功回傳 FileMaker！', 'success');
                 } else {
-                    throw new Error(`FileMaker API 錯誤: ${data.message || '未知錯誤'}`);
+                    throw new Error(`代理伺服器處理失敗: ${data.message || '未知錯誤'}`);
                 }
             } catch (error) {
                 updateStatus(`GPS 座標回傳失敗: ${error.message}`, 'error');
@@ -180,73 +212,46 @@
         }
 
         /**
-         * 主執行函數：處理 GPS 位置檢測與 FileMaker 回傳
+         * 主執行函數：處理地址地理編碼與 FileMaker 回傳
          */
-        async function executeGpsUpdate() {
-            updateStatus('正在偵測您的 GPS 位置...', 'info');
-            userLocationInfo.textContent = '';
-            accuracyInfo.textContent = '';
+        async function executeGeocodingAndFmUpdate() {
+            updateStatus('初始化中...', 'info');
+            addressInfoDiv.textContent = '';
+            fmInfoDiv.textContent = '';
+            geocodedLocationInfo.textContent = '';
 
-            // 確保 FileMaker 記錄 ID 參數存在
+            // 確保 URL 參數存在
             if (!parseUrlParams()) {
                 // 錯誤訊息已在 parseUrlParams 中處理，直接結束
                 setTimeout(() => window.close(), 2000);
                 return;
             }
 
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        const userLat = position.coords.latitude;
-                        const userLon = position.coords.longitude;
-                        const userAccuracy = position.coords.accuracy;
-
-                        userLocationInfo.textContent = `位置: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`;
-                        accuracyInfo.textContent = `精度: ± ${userAccuracy.toFixed(2)} 公尺`;
-
-                        try {
-                            await updateFileMakerRecordViaProxy(userLat, userLon);
-                        } catch (apiError) {
-                            // 錯誤已在 updateFileMakerRecordViaProxy 中處理
-                            console.error('API 操作流程中斷:', apiError);
-                        } finally {
-                            // 無論成功或失敗，延遲後嘗試關閉頁面
-                            setTimeout(() => window.close(), 2000); // 延遲 2 秒後關閉
-                        }
-                    },
-                    (error) => {
-                        let errorMessage = '未知錯誤。';
-                        switch (error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage = '您已拒絕位置授權。';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage = '位置資訊無法取得。';
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage = '取得位置超時。';
-                                break;
-                        }
-                        updateStatus(`取得 GPS 失敗: ${errorMessage}`, 'error');
-                        userLocationInfo.textContent = `錯誤: ${errorMessage}`;
-                        // 即使失敗，也嘗試關閉頁面
-                        setTimeout(() => window.close(), 2000); // 延遲 2 秒後關閉
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000, // 10 秒超時
-                        maximumAge: 0   // 不使用快取的位置
-                    }
-                );
-            } else {
-                updateStatus('您的瀏覽器不支援地理定位！', 'error');
-                // 嘗試關閉頁面
+            try {
+                // 透過代理伺服器處理地理編碼並回傳 FileMaker
+                await geocodeAndUpdateFileMakerViaProxy(targetAddress);
+            } catch (error) {
+                // 錯誤已在各自函數中處理
+                console.error('操作流程中斷:', error);
+            } finally {
+                // 無論成功或失敗，延遲後嘗試關閉頁面
                 setTimeout(() => window.close(), 2000); // 延遲 2 秒後關閉
             }
         }
 
+        /**
+         * 手動關閉頁面
+         */
+        function closePageManually() {
+            window.close();
+        }
+
         // 頁面載入後立即執行主函數
-        document.addEventListener('DOMContentLoaded', executeGpsUpdate);
+        document.addEventListener('DOMContentLoaded', () => {
+            executeGeocodingAndFmUpdate();
+            // 為手動關閉按鈕添加事件監聽器
+            manualCloseBtn.addEventListener('click', closePageManually);
+        });
     </script>
 </body>
 </html>
